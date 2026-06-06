@@ -12,6 +12,7 @@
 
 
 -- 1. Authenticated users can UPLOAD files to their own folder
+-- (Option A: Using foldername array helper)
 create policy "Authenticated users can upload their own files"
 on storage.objects for insert
 to authenticated
@@ -20,8 +21,18 @@ with check (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
+-- (Option B: Alternative prefix-based check - run this if Option A fails)
+-- create policy "Authenticated users can upload their own files prefix"
+-- on storage.objects for insert
+-- to authenticated
+-- with check (
+--   bucket_id = 'study-documents'
+--   and name like (auth.uid()::text || '/%')
+-- );
+
 
 -- 2. Authenticated users can VIEW / DOWNLOAD their own files
+-- (Option A: Using foldername array helper)
 create policy "Authenticated users can view their own files"
 on storage.objects for select
 to authenticated
@@ -30,8 +41,18 @@ using (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
+-- (Option B: Alternative prefix-based check - run this if Option A fails)
+-- create policy "Authenticated users can view their own files prefix"
+-- on storage.objects for select
+-- to authenticated
+-- using (
+--   bucket_id = 'study-documents'
+--   and name like (auth.uid()::text || '/%')
+-- );
+
 
 -- 3. Authenticated users can DELETE their own files
+-- (Option A: Using foldername array helper)
 create policy "Authenticated users can delete their own files"
 on storage.objects for delete
 to authenticated
@@ -39,6 +60,15 @@ using (
   bucket_id = 'study-documents'
   and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+-- (Option B: Alternative prefix-based check - run this if Option A fails)
+-- create policy "Authenticated users can delete their own files prefix"
+-- on storage.objects for delete
+-- to authenticated
+-- using (
+--   bucket_id = 'study-documents'
+--   and name like (auth.uid()::text || '/%')
+-- );
 
 
 -- 4. (Optional) Block all anonymous / public access entirely

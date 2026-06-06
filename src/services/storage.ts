@@ -1,4 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 /** The name of the Supabase Storage bucket used for all uploads */
 export const STORAGE_BUCKET = 'study-documents';
@@ -73,9 +77,29 @@ async function extractContentText(file: File): Promise<string> {
     }
   }
 
-  // For PDFs: placeholder educational content keyed to the file name.
-  // Replace this with a real PDF parser (e.g. pdf.js) or a server-side
-  // Edge Function that extracts text and stores it in documents.content_text.
+  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    try {
+      console.info(`Starting PDF text extraction for: ${file.name}`);
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        fullText += pageText + '\n\n';
+      }
+      
+      console.info(`Successfully extracted ${fullText.length} characters from ${pdf.numPages} pages.`);
+      return fullText.trim();
+    } catch (err: any) {
+      console.error(`Error parsing PDF (${file.name}):`, err.message);
+      // Fall back to mock content below if it fails completely
+    }
+  }
+
+  // Fallback placeholder content for unreadable or unsupported files
   return generateMockContentForFile(file.name);
 }
 

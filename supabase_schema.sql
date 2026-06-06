@@ -199,7 +199,6 @@ returns table (
     metadata jsonb,
     similarity float
 )
-language sql stable
 as $$
   select
     document_chunks.id,
@@ -212,7 +211,7 @@ as $$
     and 1 - (document_chunks.embedding <=> query_embedding) > match_threshold
   order by document_chunks.embedding <=> query_embedding
   limit match_count;
-$$;
+$$ language sql stable;
 
 
 -- 10. Supabase Storage Configuration instructions

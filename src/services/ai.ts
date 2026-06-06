@@ -19,16 +19,29 @@ export interface DocumentChunk {
  * Splits text into overlapping chunks of a target character length.
  */
 export function chunkDocument(text: string, chunkSize = 600, overlap = 120): string[] {
-  if (!text) return [];
+  if (!text || text.trim() === '') {
+    console.info('chunkDocument: Empty text provided, returning 0 chunks.');
+    return [];
+  }
+  
+  if (text.length <= chunkSize) {
+    console.info('chunkDocument: Text is smaller than chunk size, returning 1 chunk.');
+    return [text.trim()];
+  }
+
   const chunks: string[] = [];
   let index = 0;
 
   while (index < text.length) {
     const chunk = text.substring(index, index + chunkSize);
-    chunks.push(chunk.trim());
+    const trimmedChunk = chunk.trim();
+    if (trimmedChunk) {
+      chunks.push(trimmedChunk);
+    }
     index += chunkSize - overlap;
   }
 
+  console.info(`chunkDocument: Split text into ${chunks.length} chunks (size=${chunkSize}, overlap=${overlap}).`);
   return chunks;
 }
 

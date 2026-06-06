@@ -151,12 +151,16 @@ export async function saveDocumentMetadata(
     }));
 
     if (chunksData.length > 0) {
+      console.info(`Inserting ${chunksData.length} chunks into database for document ${document.id}...`);
       const { error: chunkError } = await supabase
         .from('document_chunks')
         .insert(chunksData);
       
       if (chunkError) {
-        console.error('Failed to save document chunks to Supabase, but metadata is saved:', chunkError.message);
+        console.error('Failed to save document chunks to Supabase:', chunkError.message);
+        throw new Error(`Document saved but chunking failed: ${chunkError.message}`);
+      } else {
+        console.info(`Successfully saved ${chunksData.length} chunks.`);
       }
     }
 
