@@ -17,7 +17,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getDocumentChunks } from './db';
 import {
   queryMockVectorStore,
-  generateMockAnswer,
+  streamGroundedAnswer,
   generateEmbedding,
   type DocumentChunk,
 } from './ai';
@@ -141,13 +141,13 @@ export async function ragAnswer(
     }));
 
     // ── Step 3: Stream answer ──────────────────────────────────────────────
-    // generateMockAnswer calls onChunk repeatedly then calls the completion cb.
-    generateMockAnswer(
+    await streamGroundedAnswer(
       query,
       matchedChunks,
       documentNames,
       (partialText) => onChunk(partialText),
-      (fullText) => onComplete(fullText, sources)
+      (fullText) => onComplete(fullText, sources),
+      (error) => onError(error)
     );
 
     /*
