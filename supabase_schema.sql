@@ -214,6 +214,14 @@ as $$
 $$ language sql stable;
 
 
+-- 9.5. Database Privileges for Supabase Roles
+-- Ensure authenticated users have access to perform select, insert, update, and delete.
+grant usage on schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role;
+
+
 -- 10. Supabase Storage Configuration instructions
 -- Note: Create a bucket named "study-documents" in the Supabase Storage Dashboard.
 -- Configure the following Storage policies for the "study-documents" bucket:
