@@ -318,6 +318,28 @@ export async function deleteChatSession(sessionId: string): Promise<void> {
   setLocal(MOCK_MESSAGES, messages);
 }
 
+export async function clearAllChatSessions(userId: string): Promise<void> {
+  if (isSupabaseConfigured) {
+    const { error } = await supabase
+      .from('chat_sessions')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw new Error(`Failed to clear all chat sessions: ${error.message}`);
+    return;
+  }
+
+  const sessions = getLocal<ChatSession[]>(MOCK_SESSIONS, []);
+  const userSessionIds = sessions.filter(s => s.user_id === userId).map(s => s.id);
+
+  const remainingSessions = sessions.filter(s => s.user_id !== userId);
+  setLocal(MOCK_SESSIONS, remainingSessions);
+
+  let messages = getLocal<ChatMessage[]>(MOCK_MESSAGES, []);
+  messages = messages.filter(m => !userSessionIds.includes(m.session_id));
+  setLocal(MOCK_MESSAGES, messages);
+}
+
 // --- Chat Messages Service ---
 
 export async function fetchChatMessages(sessionId: string): Promise<ChatMessage[]> {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   fetchDocuments, saveDocumentMetadata, deleteDocument,
-  fetchChatSessions, deleteChatSession,
+  fetchChatSessions, deleteChatSession, clearAllChatSessions,
   getProfile, updateProfile,
   type Document, type ChatSession, type Profile,
 } from '../services/db';
@@ -158,6 +158,19 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
       showToast('Session deleted.', 'success');
     } catch {
       showToast('Failed to delete session.', 'error');
+    }
+  };
+
+  const handleClearAllSessions = async () => {
+    if (sessions.length === 0) return;
+    if (!confirm('Are you sure you want to clear all chat sessions? This action cannot be undone.')) return;
+    try {
+      showToast('Clearing all sessions…', 'warning');
+      await clearAllChatSessions(user.id);
+      setSessions([]);
+      showToast('All chat sessions cleared.', 'success');
+    } catch {
+      showToast('Failed to clear chat sessions.', 'error');
     }
   };
 
@@ -369,11 +382,19 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
             <h3 style={{ fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={17} style={{ color: 'var(--primary-light)' }} /> Recent Sessions
             </h3>
-            <button className="btn btn-secondary"
-              style={{ padding: '4px 10px', fontSize: '0.78rem' }}
-              onClick={() => onStartChat(documents)}>
-              View all
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-secondary"
+                style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                onClick={() => onStartChat(documents)}>
+                View all
+              </button>
+              <button className="btn btn-danger"
+                style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                onClick={handleClearAllSessions}
+                disabled={sessions.length === 0}>
+                Clear all
+              </button>
+            </div>
           </div>
 
           {loadingSessions ? (
