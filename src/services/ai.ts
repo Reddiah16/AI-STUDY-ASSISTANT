@@ -207,7 +207,7 @@ export class MockLlmProvider implements LlmProvider {
       // Extract original details from the user prompt for compatibility
       const queryMatch = userPrompt.match(/User Question:\s*"([^"]+)"/i) || userPrompt.match(/Question:\s*(.+)/i);
       const query = queryMatch ? queryMatch[1] : 'your query';
-      const hasChunks = userPrompt.includes('Study Materials:');
+      const hasChunks = !userPrompt.includes('No study materials were selected');
       
       let header = `### AI Study Guide - Analysis\n\n`;
       if (!hasChunks) {
