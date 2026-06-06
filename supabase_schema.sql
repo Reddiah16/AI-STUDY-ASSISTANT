@@ -1,6 +1,14 @@
 -- AI Study Assistant - Supabase Postgres Schema
 -- This schema prepares the database for users, document management, chat sessions, and vector similarity search.
 
+-- =========================================================================
+-- HOW TO ENABLE pgvector IN SUPABASE:
+-- 1. In your Supabase Dashboard, navigate to Database -> Extensions.
+-- 2. Search for "vector" and toggle it ON.
+-- OR simply run the following SQL command in the SQL Editor:
+--    create extension if not exists "vector";
+-- =========================================================================
+
 -- 1. Enable extensions
 create extension if not exists "uuid-ossp";
 create extension if not exists "vector"; -- Enables pgvector for RAG embeddings (1536 dimensions)
@@ -34,6 +42,9 @@ create table public.document_chunks (
     embedding vector(1536), -- 1536-dimensional vector for OpenAI/Gemini embeddings
     created_at timestamp with time zone default now() not null
 );
+
+-- HNSW Vector Index: Speed up cosine similarity searches
+create index on public.document_chunks using hnsw (embedding vector_cosine_ops);
 
 -- 5. Chat Sessions Table
 create table public.chat_sessions (
@@ -179,7 +190,7 @@ create or replace function match_document_chunks (
     query_embedding vector(1536),
     match_threshold float,
     match_count int,
-    filter_document_id uuid
+    filter_document_ids uuid[]
 )
 returns table (
     id uuid,
@@ -197,7 +208,7 @@ as $$
     document_chunks.metadata,
     1 - (document_chunks.embedding <=> query_embedding) as similarity
   from document_chunks
-  where document_chunks.document_id = filter_document_id
+  where document_chunks.document_id = any(filter_document_ids)
     and 1 - (document_chunks.embedding <=> query_embedding) > match_threshold
   order by document_chunks.embedding <=> query_embedding
   limit match_count;

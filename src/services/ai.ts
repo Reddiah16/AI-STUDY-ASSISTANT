@@ -3,7 +3,7 @@
  * Contains placeholders and modular interfaces for:
  * 1. Document chunking (sliding window text splitter)
  * 2. Embedding generation (1536-dim vector generator placeholder)
- * 3. Vector retrieval (simulated cosine similarity search on text chunks)
+ * 3. Semantic retrieval (simulated cosine similarity search on text chunks)
  * 4. Grounded answer generation (simulated streaming responses with citations)
  */
 
@@ -15,6 +15,7 @@ export interface DocumentChunk {
 }
 
 /**
+ * 1. Document Chunking
  * Splits text into overlapping chunks of a target character length.
  */
 export function chunkDocument(text: string, chunkSize = 600, overlap = 120): string[] {
@@ -32,10 +33,12 @@ export function chunkDocument(text: string, chunkSize = 600, overlap = 120): str
 }
 
 /**
- * Generates a deterministic mock embedding vector (1536 dimensions) for a given text.
- * Used for vector database column compatibility testing.
+ * 2. Embedding Generation
+ * Generates a 1536-dimension float vector for a given text.
+ * Currently uses a deterministic algorithm to simulate vector database compatibility.
+ * Replace this with a real API call (e.g., OpenAI text-embedding-3-small or Gemini embeddings) in production.
  */
-export function generateMockEmbedding(text: string): number[] {
+export async function generateEmbedding(text: string): Promise<number[]> {
   const vector = new Array(1536).fill(0);
   // Hash the text to generate deterministic floating point numbers between -1 and 1
   let hash = 0;
@@ -51,11 +54,27 @@ export function generateMockEmbedding(text: string): number[] {
   return vector;
 }
 
+// Compatibility alias for existing callers
+export function generateMockEmbedding(text: string): number[] {
+  // Synchronous wrapper of the embedding function for backward compatibility
+  const vector = new Array(1536).fill(0);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = text.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  for (let j = 0; j < 1536; j++) {
+    const value = Math.sin(hash + j) * Math.cos(hash - j);
+    vector[j] = Math.round(value * 10000) / 10000;
+  }
+  return vector;
+}
+
 /**
+ * 3. Semantic Retrieval (Local Simulation)
  * Simulates vector query matching using keyword density / string matching.
- * In a real application, this triggers the pgvector match_document_chunks RPC call in Supabase.
+ * In production, this logic will be handled by Supabase pgvector RPC call match_document_chunks.
  */
-export async function queryMockVectorStore(
+export async function semanticRetrieval(
   query: string,
   chunks: DocumentChunk[],
   limit = 3
@@ -90,10 +109,15 @@ export async function queryMockVectorStore(
     .slice(0, limit);
 }
 
+// Compatibility alias for queryMockVectorStore
+export const queryMockVectorStore = semanticRetrieval;
+
 /**
+ * 4. Grounded Answer Generation
  * Simulates a streaming educational RAG answer, incorporating references from documents.
+ * Replace this with a call to your LLM API (e.g. Gemini, OpenAI) utilizing the retrieved chunks as context.
  */
-export function generateMockAnswer(
+export function generateGroundedAnswer(
   query: string,
   contextChunks: DocumentChunk[],
   documentNames: string[],
@@ -162,3 +186,7 @@ export function generateMockAnswer(
     }
   }, 45); // Speed adjustments for typing simulation
 }
+
+// Compatibility alias for generateMockAnswer
+export const generateMockAnswer = generateGroundedAnswer;
+

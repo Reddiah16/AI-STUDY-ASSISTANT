@@ -13,10 +13,12 @@
  * a real LLM is a one-file change.
  */
 
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getDocumentChunks } from './db';
 import {
   queryMockVectorStore,
   generateMockAnswer,
+  generateEmbedding,
   type DocumentChunk,
 } from './ai';
 
@@ -53,8 +55,8 @@ export interface RagStreamCallbacks {
 /**
  * Fetches document chunks from the database and ranks them by relevance.
  *
- * FUTURE: replace with a Supabase RPC call to `match_document_chunks`
- * using a real embedding vector.
+ * Uses Supabase RPC vector search (`match_document_chunks`) when Supabase
+ * is configured, otherwise falls back to local simulation.
  */
 async function retrieveRelevantChunks(
   query: string,
@@ -63,10 +65,39 @@ async function retrieveRelevantChunks(
 ): Promise<DocumentChunk[]> {
   if (documentIds.length === 0) return [];
 
+  if (isSupabaseConfigured) {
+    try {
+      // 1. Generate query embedding
+      const queryEmbedding = await generateEmbedding(query);
+
+      // 2. Query Supabase vector storage using the pgvector RPC similarity search
+      const { data, error } = await supabase.rpc('match_document_chunks', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.2, // Low threshold to capture relevant context
+        match_count: topK,
+        filter_document_ids: documentIds,
+      });
+
+      if (error) {
+        console.warn('Supabase pgvector RPC search failed, falling back to client search:', error.message);
+      } else if (data && data.length > 0) {
+        return data.map((item: any) => ({
+          id: item.id,
+          documentId: item.document_id,
+          content: item.content,
+          similarity: item.similarity,
+        }));
+      }
+    } catch (err) {
+      console.warn('Vector search exception, falling back:', err);
+    }
+  }
+
+  // Local fallback/demo flow:
   // 1. Pull all stored chunks for the selected documents
   const allChunks = await getDocumentChunks(documentIds);
 
-  // 2. Score + rank chunks  (swap this for pgvector cosine similarity)
+  // 2. Score + rank chunks using local TF-IDF approximation
   return queryMockVectorStore(query, allChunks, topK);
 }
 
