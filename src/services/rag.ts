@@ -29,6 +29,7 @@ export interface RagSource {
   documentId: string;
   fileName: string;
   contentSnippet: string;
+  content: string; // The full retrieved context chunk
   similarity: number;
 }
 
@@ -137,6 +138,7 @@ export async function ragAnswer(
           return idx !== -1 ? documentNames[idx] : 'Document';
         })(),
       contentSnippet: chunk.content.substring(0, 140) + '…',
+      content: chunk.content, // Save the full retrieved context
       similarity: chunk.similarity ?? 0.5,
     }));
 

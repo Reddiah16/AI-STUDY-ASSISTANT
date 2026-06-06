@@ -354,6 +354,37 @@ export function getLlmProvider(): LlmProvider {
   return activeLlmProvider;
 }
 
+export interface GroundedPromptPayload {
+  systemPrompt: string;
+  userPrompt: string;
+}
+
+/**
+ * Builds the grounded system and user prompts.
+ * This is kept modular to make it easy to customize the prompts later.
+ */
+export function buildGroundedPrompt(
+  query: string,
+  contextChunks: DocumentChunk[],
+  documentNames: string[]
+): GroundedPromptPayload {
+  const systemPrompt = `You are an expert AI Study Assistant. Use the provided study material chunks to answer the user's question accurately and helpfully.
+Structure your response clearly using markdown headings, lists, and bold text to make it easy to study.
+
+CRITICAL: You must answer the question using ONLY the provided study material chunks as context. Do not use external general knowledge except when strictly needed for definitions/clarity. If the provided chunks do not contain relevant information to answer the question, state clearly: "I cannot find the answer to this question in the selected study documents."`;
+
+  const userPrompt = contextChunks.length === 0
+    ? `No study materials were selected for this query. Provide a clear message to the user: "No active study documents are selected. Please select one or more documents from the context panel above so I can answer your question."`
+    : `Study Materials (from documents: ${documentNames.join(', ')}):
+${contextChunks.map((c, i) => `[Source ${i + 1}]: ${c.content}`).join('\n\n')}
+
+User Question: "${query}"
+
+Provide a detailed grounded answer based strictly on the study materials above.`;
+
+  return { systemPrompt, userPrompt };
+}
+
 export async function streamGroundedAnswer(
   query: string,
   contextChunks: DocumentChunk[],
@@ -362,19 +393,7 @@ export async function streamGroundedAnswer(
   onComplete: (fullText: string) => void,
   onError: (error: Error) => void
 ): Promise<void> {
-  const systemPrompt = `You are an expert AI Study Assistant. Use the provided study material chunks to answer the user's question accurately and helpfully.
-If the chunks do not contain relevant info, use your general knowledge but note clearly that the answer is based on general knowledge rather than the selected documents.
-Structure your response clearly using markdown headings, lists, and bold text to make it easy to study.`;
-
-  const userPrompt = contextChunks.length === 0
-    ? `No study materials were selected for this query. Provide a general educational answer for the following question:
-User Question: "${query}"`
-    : `Study Materials (from documents: ${documentNames.join(', ')}):
-${contextChunks.map((c, i) => `[Source ${i + 1}]: ${c.content}`).join('\n\n')}
-
-User Question: "${query}"
-
-Provide a detailed grounded answer based on the study materials.`;
+  const { systemPrompt, userPrompt } = buildGroundedPrompt(query, contextChunks, documentNames);
 
   try {
     const provider = getLlmProvider();
