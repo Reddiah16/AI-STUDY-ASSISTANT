@@ -1,73 +1,100 @@
-# React + TypeScript + Vite
+# 🎓 AI Study Assistant
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A premium, responsive, and feature-rich educational workspace built with **React, TypeScript, Vite, and Vanilla CSS**, featuring robust integration points for **Supabase (Auth, Postgres, Storage)** and a modular **RAG (Retrieval-Augmented Generation)** document-retrieval pipeline.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🌟 Key Features
 
-## React Compiler
+*   **Premium Visual Experience**: Modern deep-dark theme built using HSL color systems, complete with smooth animations, custom scrollbars, and card-glassmorphism.
+*   **Intelligent Study Chat**: Interactive chat groundable in one or more uploaded PDF documents. Features live-typing/streaming answers, suggestions, and clean source citation overlays.
+*   **Modular RAG Services**: Features dedicated splitters, placeholder embedding models, and similarity search routines.
+*   **Dual Mode Capabilities**: Seamlessly switches between full **Supabase Backend Mode** and local-only **Demo Mode** (using LocalStorage for DB/metadata and mock content synthesis for uploads).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 📁 Project Architecture
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+The architecture separates UI state, data access layers, and heavy compute/AI operations cleanly:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+AI Study Assistant/
+├── .env.example          # Template for environment configuration
+├── supabase_schema.sql   # Complete SQL schema: profiles, docs, chunks, chats, RLS, RPCs
+├── storage_policies.sql  # Storage bucket security policies
+├── src/
+│   ├── main.tsx          # Application entry point
+│   ├── App.tsx           # Session control, global auth, and route state
+│   ├── index.css         # Styling system (variables, animations, grids, overlays)
+│   ├── lib/
+│   │   └── supabase.ts   # Client SDK setup with fallback detection
+│   ├── services/
+│   │   ├── db.ts         # Database CRUD (handles both Postgres & local DB operations)
+│   │   ├── storage.ts    # File uploads & text extraction routines
+│   │   ├── ai.ts         # Modular RAG chunking, embeddings, and grounded synthesis
+│   │   └── rag.ts        # Vector retrieval router (Supabase RPC vector search / Local TF-IDF)
+│   └── components/
+│       ├── LandingPage.tsx   # Dashboard introduction, features grid, entry portal
+│       ├── AuthForm.tsx      # Sign-in / Sign-up form panel with validation
+│       ├── Dashboard.tsx     # Files uploader, statistics panels, document table
+│       └── ChatInterface.tsx # Study workspace, sidebar session logs, target citations
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 🛠️ Supabase Configuration & `pgvector` Setup
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+To run the application with a real backend, follow these setup steps:
+
+### 1. Enable `pgvector` Extension
+Vector similarity search relies on the `pgvector` extension.
+*   **Option A (SQL Editor)**: Run the following command in your Supabase SQL Editor:
+    ```sql
+    create extension if not exists vector;
+    ```
+*   **Option B (Dashboard)**: Go to **Database** -> **Extensions** -> Search for `vector` -> Click **Enable**.
+
+### 2. Run Database Schema
+Execute the contents of [`supabase_schema.sql`](file:///c:/Reddiah/AI%20Study%20Assistant/supabase_schema.sql) in your Supabase SQL Editor. This will:
+*   Configure public tables: `profiles`, `documents`, `document_chunks`, `chat_sessions`, and `messages`.
+*   Establish Row-Level Security (RLS) policies.
+*   Initialize the `match_document_chunks` RPC function for multi-document cosine similarity searches.
+*   Setup database triggers to automatically create student profiles upon sign-up.
+*   Establish an **HNSW (Hierarchical Navigable Small World)** vector index on `document_chunks` for fast semantic similarity checks:
+    ```sql
+    create index on public.document_chunks using hnsw (embedding vector_cosine_ops);
+    ```
+
+### 3. Setup Storage Bucket
+1. Go to **Storage** in the Supabase Dashboard and create a new bucket named `study-documents` (make it private).
+2. Apply the policies defined in [`storage_policies.sql`](file:///c:/Reddiah/AI%20Study%20Assistant/storage_policies.sql) (or copy them from the instructions at the bottom of `supabase_schema.sql`) to configure selective upload/download permissions for authenticated users.
+
+### 4. Setup Environment Keys
+Create a `.env.local` file in the root directory and supply your project keys:
+```env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anonymous-key
 ```
+
+---
+
+## 🛡️ Supabase MCP Integration Report
+
+### Detection Finding
+During setup, we performed detection checks to identify if a **Supabase Model Context Protocol (MCP)** server or tools were available in the execution workspace. 
+*   **Result**: No active Supabase MCP tools (e.g. `supabase/*` commands) are registered or enabled in this context.
+*   **Resolution**: The application relies on the standard, stable **Supabase JS Client SDK** (`@supabase/supabase-js`), which provides secure, direct browser-to-backend communication authenticated via JWT.
+
+---
+
+## 🚀 How to Run Locally
+
+1.  **Install project dependencies**:
+    ```powershell
+    npm install
+    ```
+2.  **Start the development server**:
+    ```powershell
+    npm run dev
+    ```
+    *Note: If no `.env.local` variables are present, the app will display a visual notice indicating it is running in local offline **Demo Mode**, utilizing mock datasets so you can try all upload, chunking, and grounded messaging features immediately.*
