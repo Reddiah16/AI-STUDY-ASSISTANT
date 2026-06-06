@@ -218,15 +218,58 @@ export class MockLlmProvider implements LlmProvider {
 
       let body = '';
       if (hasChunks) {
-        body += `Based on your study files, here is a detailed breakdown answering: **"${query}"**\n\n`;
-        body += `#### Key Summary:\n`;
-        body += `1. **Direct Answer:** The material indicates that the core concepts described in your files are essential for this study topic.\n`;
-        body += `2. **Supporting Context:** Additionally, details from the text mention relevant examples and definitions to support this.\n`;
-        body += `\n#### Academic Explanation:\n`;
-        body += `When examining this topic, teachers typically look for your understanding of cause-and-effect relationships. Based on the retrieved passages, the variables are closely connected, showing that changes in one directly influence the outcome.\n\n`;
-        body += `#### Suggested Revision Steps:\n`;
-        body += `- **Review Flashcards:** Ensure you can define the key vocabulary terms mentioned in these passages.\n`;
-        body += `- **Connection Exercise:** Connect this concept with the preceding chapter to build a comprehensive concept map.\n\n`;
+        // Parse sources from userPrompt
+        const sources: { index: number; content: string }[] = [];
+        const sourceRegex = /\[Source (\d+)\]:\s*([\s\S]+?)(?=\[Source \d+\]|User Question:|$)/g;
+        let match;
+        while ((match = sourceRegex.exec(userPrompt)) !== null) {
+          sources.push({
+            index: parseInt(match[1]),
+            content: match[2].trim()
+          });
+        }
+
+        // Find relevant sources based on keyword matching
+        const queryWords = query
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, "")
+          .split(/\s+/)
+          .filter(w => w.length > 3 && !['what', 'how', 'does', 'explain', 'why', 'where', 'when', 'who', 'which', 'about', 'from', 'with', 'your', 'study'].includes(w));
+
+        const scoredSources = sources.map(src => {
+          let score = 0;
+          const contentLower = src.content.toLowerCase();
+          queryWords.forEach(word => {
+            if (contentLower.includes(word)) {
+              score += 1;
+            }
+          });
+          return { ...src, score };
+        });
+
+        // Sort by score desc, select top sources
+        const sortedSources = scoredSources.sort((a, b) => b.score - a.score);
+        const topSources = sortedSources.filter(s => s.score > 0 || sortedSources.indexOf(s) < 2);
+
+        body += `Based on your selected study materials, here is a detailed breakdown answering: **"${query}"**\n\n`;
+        
+        body += `#### Key Summary from Documents:\n`;
+        topSources.slice(0, 2).forEach((src, idx) => {
+          const sentences = src.content.split(/[.!?]+/);
+          const brief = (sentences[0] || '').trim() + (sentences[1] ? '. ' + sentences[1].trim() : '') + '.';
+          body += `${idx + 1}. **Source ${src.index} Highlight:** ${brief || src.content.substring(0, 150) + '...'} (Grounding Reference: **[Source ${src.index}]**)\n`;
+        });
+
+        body += `\n#### Academic Context:\n`;
+        const primarySource = topSources[0];
+        if (primarySource) {
+          body += `The study document states the following context in **[Source ${primarySource.index}]**:\n`;
+          body += `> "... ${primarySource.content.substring(0, 300)}${primarySource.content.length > 300 ? '...' : ''} ..."\n\n`;
+        }
+
+        body += `#### Study & Revision Suggestions:\n`;
+        body += `- **Key Vocabulary:** Focus on key terms retrieved in these sections (e.g., ${queryWords.slice(0, 3).join(', ') || 'underlined terms'}).\n`;
+        body += `- **Concept Mapping:** Draw connection lines between these source segments to reinforce your memory.\n\n`;
       } else {
         body += `To answer **"${query}"**, let's look at standard academic principles:\n\n`;
         body += `1. **Core Concept:** Standard revision indicates that breaking down complex questions into sub-questions is key. For this topic, first examine its base definitions.\n`;
