@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { type DocumentChunk, chunkDocument, generateMockEmbedding } from './ai';
+import { type DocumentChunk, chunkDocument, getEmbeddingProvider } from './ai';
 
 // --- Database Interfaces ---
 
@@ -143,11 +143,16 @@ export async function saveDocumentMetadata(
 
     // 2. Perform chunking & create embeddings
     const textChunks = chunkDocument(contentText);
+    console.info(`Generating embeddings for ${textChunks.length} chunks...`);
+    
+    const provider = getEmbeddingProvider();
+    const embeddings = await provider.generateBatch(textChunks);
+
     const chunksData = textChunks.map((chunk, idx) => ({
       document_id: document.id,
       content: chunk,
       metadata: { page: idx + 1, name: fileName },
-      embedding: generateMockEmbedding(chunk) // Generate compatible vector dimensions
+      embedding: embeddings[idx]
     }));
 
     if (chunksData.length > 0) {

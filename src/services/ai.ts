@@ -47,38 +47,94 @@ export function chunkDocument(text: string, chunkSize = 600, overlap = 120): str
 
 /**
  * 2. Embedding Generation
- * Generates a 1536-dimension float vector for a given text.
- * Currently uses a deterministic algorithm to simulate vector database compatibility.
- * Replace this with a real API call (e.g., OpenAI text-embedding-3-small or Gemini embeddings) in production.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  const vector = new Array(1536).fill(0);
-  // Hash the text to generate deterministic floating point numbers between -1 and 1
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = text.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  for (let j = 0; j < 1536; j++) {
-    const value = Math.sin(hash + j) * Math.cos(hash - j);
-    vector[j] = Math.round(value * 10000) / 10000;
-  }
-  
-  return vector;
+
+export interface EmbeddingProvider {
+  generate(text: string): Promise<number[]>;
+  generateBatch(texts: string[]): Promise<number[][]>;
 }
 
-// Compatibility alias for existing callers
+export class MockEmbeddingProvider implements EmbeddingProvider {
+  async generate(text: string): Promise<number[]> {
+    const vector = new Array(1536).fill(0);
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = text.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    for (let j = 0; j < 1536; j++) {
+      const value = Math.sin(hash + j) * Math.cos(hash - j);
+      vector[j] = Math.round(value * 10000) / 10000;
+    }
+    return vector;
+  }
+
+  async generateBatch(texts: string[]): Promise<number[][]> {
+    return Promise.all(texts.map(t => this.generate(t)));
+  }
+}
+
+export class OpenAIEmbeddingProvider implements EmbeddingProvider {
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  async generate(text: string): Promise<number[]> {
+    const results = await this.generateBatch([text]);
+    return results[0];
+  }
+
+  async generateBatch(texts: string[]): Promise<number[][]> {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify({
+        input: texts,
+        model: 'text-embedding-3-small' // standard 1536-dim model
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`OpenAI API error: ${error?.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.data.map((item: any) => item.embedding);
+  }
+}
+
+let activeProvider: EmbeddingProvider | null = null;
+
+export function getEmbeddingProvider(): EmbeddingProvider {
+  if (activeProvider) return activeProvider;
+
+  const openAiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  if (openAiKey) {
+    console.info('Using OpenAIEmbeddingProvider');
+    activeProvider = new OpenAIEmbeddingProvider(openAiKey);
+  } else {
+    console.info('Using MockEmbeddingProvider (No API key found)');
+    activeProvider = new MockEmbeddingProvider();
+  }
+
+  return activeProvider;
+}
+
+export async function generateEmbedding(text: string): Promise<number[]> {
+  return getEmbeddingProvider().generate(text);
+}
+
+// Compatibility alias for remaining synchronous callers
 export function generateMockEmbedding(text: string): number[] {
-  // Synchronous wrapper of the embedding function for backward compatibility
   const vector = new Array(1536).fill(0);
   let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = text.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  for (let j = 0; j < 1536; j++) {
-    const value = Math.sin(hash + j) * Math.cos(hash - j);
-    vector[j] = Math.round(value * 10000) / 10000;
-  }
+  for (let i = 0; i < text.length; i++) { hash = text.charCodeAt(i) + ((hash << 5) - hash); }
+  for (let j = 0; j < 1536; j++) { vector[j] = Math.round((Math.sin(hash + j) * Math.cos(hash - j)) * 10000) / 10000; }
   return vector;
 }
 
