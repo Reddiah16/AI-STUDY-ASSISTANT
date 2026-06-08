@@ -104,13 +104,48 @@ function renderLines(lines: string[]): React.ReactNode {
   });
 }
 
+// ─── Grounding helpers ──────────────────────────────────────────────────────────
+
+function getGroundingLevel(sources: RagSource[]): 'high' | 'medium' | 'low' | 'none' {
+  if (sources.length === 0) return 'none';
+  const maxSim = Math.max(...sources.map(s => s.similarity));
+  if (maxSim >= 0.70) return 'high';
+  if (maxSim >= 0.50) return 'medium';
+  return 'low';
+}
+
+function GroundingBadge({ sources }: { sources: RagSource[] }) {
+  const level = getGroundingLevel(sources);
+  const n = sources.length;
+  const configs = {
+    high:   { icon: '🟢', text: `Grounded · ${n} source${n > 1 ? 's' : ''}` },
+    medium: { icon: '🟡', text: `Partially grounded · ${n} source${n > 1 ? 's' : ''}` },
+    low:    { icon: '🟠', text: `Weak grounding · ${n} source${n > 1 ? 's' : ''}` },
+    none:   { icon: '⚪', text: 'General knowledge — no documents matched' },
+  };
+  const { icon, text } = configs[level];
+  return (
+    <div className={`grounding-badge ${level}`}>
+      <span>{icon}</span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
 /**
  * Full structured answer renderer.
- * Splits the raw text into sections by ### or #### headings, then
- * renders each section as a visually distinct card. Falls back to a
- * plain styled bubble when there are no headings.
+ * Splits the raw text into sections by ### or #### headings, renders each
+ * as a visually distinct card. Grounding badge at top, source chips at bottom.
  */
-function StructuredAnswer({ raw }: { raw: string }) {
+function StructuredAnswer({
+  raw,
+  sources = [],
+  onOpenSource,
+}: {
+  raw: string;
+  sources?: RagSource[];
+  onOpenSource?: (idx: number) => void;
+}) {
   const sections: AnswerSection[] = [];
   let currentHeading = '';
   let currentLines: string[] = [];
@@ -128,50 +163,77 @@ function StructuredAnswer({ raw }: { raw: string }) {
       currentLines.push(line);
     }
   });
-  // push last section
   if (currentHeading || currentLines.some(l => l.trim())) {
     sections.push({ heading: currentHeading, lines: currentLines });
   }
 
-  // No headings found — plain bubble fallback
-  if (sections.length === 0 || (sections.length === 1 && !sections[0].heading)) {
-    return (
-      <div className="answer-plain">
-        {renderLines(raw.split('\n'))}
-      </div>
-    );
-  }
+  const hasHeadings = !(sections.length === 0 || (sections.length === 1 && !sections[0].heading));
 
   return (
-    <div className="answer-body">
-      {sections.map((sec, idx) => {
-        const bodyLines = sec.lines.filter(l => l.trim());
-        if (!sec.heading && bodyLines.length === 0) return null;
+    <div>
+      {/* Grounding badge */}
+      <GroundingBadge sources={sources} />
 
-        // Intro paragraph (no heading) rendered as plain bubble
-        if (!sec.heading) {
-          return (
-            <div key={idx} className="answer-plain">
-              {renderLines(bodyLines)}
-            </div>
-          );
-        }
-
-        const { icon, accent } = getSectionMeta(sec.heading);
-        return (
-          <div key={idx} className={`section-card ${accent}`}>
-            <div className="section-header">
-              <div className="section-icon-wrap">{icon}</div>
-              <div className="section-title">{sec.heading}</div>
-            </div>
-            {bodyLines.length > 0 && (
-              <div className="section-body">
-                {renderLines(bodyLines)}
+      {hasHeadings ? (
+        <div className="answer-body">
+          {sections.map((sec, idx) => {
+            const bodyLines = sec.lines.filter(l => l.trim());
+            if (!sec.heading && bodyLines.length === 0) return null;
+            if (!sec.heading) {
+              return (
+                <div key={idx} className="answer-plain">
+                  {renderLines(bodyLines)}
+                </div>
+              );
+            }
+            const { icon, accent } = getSectionMeta(sec.heading);
+            return (
+              <div key={idx} className={`section-card ${accent}`}>
+                <div className="section-header">
+                  <div className="section-icon-wrap">{icon}</div>
+                  <div className="section-title">{sec.heading}</div>
+                </div>
+                {bodyLines.length > 0 && (
+                  <div className="section-body">
+                    {renderLines(bodyLines)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      ) : (
+        <div className="answer-plain">
+          {renderLines(raw.split('\n'))}
+        </div>
+      )}
+
+      {/* Source chips — clickable citations */}
+      {sources.length > 0 && onOpenSource && (
+        <div className="source-chip-row">
+          <span className="source-chip-label">Cited:</span>
+          {sources.map((src, i) => (
+            <button
+              key={i}
+              className="source-chip"
+              onClick={() => onOpenSource(i)}
+              title={`${src.fileName} · ${Math.round(src.similarity * 100)}% match — click to view chunk`}
+            >
+              <span>📄</span>
+              <span className="source-chip-name">{src.fileName}</span>
+              <span className="source-chip-sim">{Math.round(src.similarity * 100)}%</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* No-document soft warning */}
+      {sources.length === 0 && (
+        <div className="grounding-warning">
+          <span>⚠️</span>
+          <span>No document sources were matched. Upload and select study materials for grounded, document-sourced answers.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -207,8 +269,18 @@ export default function ChatInterface({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
+  // Source drawer state
+  const [drawerSources, setDrawerSources] = useState<RagSource[]>([]);
+  const [drawerIndex, setDrawerIndex] = useState(0);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const openDrawer = (sources: RagSource[], idx: number) => {
+    setDrawerSources(sources);
+    setDrawerIndex(idx);
+  };
+  const closeDrawer = () => setDrawerSources([]);
 
   // ── Load sessions on mount ─────────────────────────────────────────────────
 
@@ -658,7 +730,11 @@ export default function ChatInterface({
                   <div className="message-content">
                     {msg.sender_role === 'user'
                       ? <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
-                      : <StructuredAnswer raw={msg.content} />
+                      : <StructuredAnswer
+                          raw={msg.content}
+                          sources={(msg.sources || []) as RagSource[]}
+                          onOpenSource={(idx) => openDrawer((msg.sources || []) as RagSource[], idx)}
+                        />
                     }
                   </div>
 
@@ -677,6 +753,7 @@ export default function ChatInterface({
                       onToggleSources={() => handleToggleSources(msg.id)}
                       onCopy={() => handleCopy(msg.id, msg.content)}
                       onSave={() => handleSaveAnswer(msg.id, msg.content)}
+                      onOpenSource={(idx) => openDrawer((msg.sources || []) as RagSource[], idx)}
                       onToast={showToast}
                     />
                   )}
@@ -742,6 +819,16 @@ export default function ChatInterface({
           .mobile-sidebar-toggle { display: none !important; }
         }
       `}</style>
+
+      {/* ── Source drawer overlay ── */}
+      {drawerSources.length > 0 && (
+        <SourceDrawer
+          sources={drawerSources}
+          index={drawerIndex}
+          onClose={closeDrawer}
+          onChange={setDrawerIndex}
+        />
+      )}
     </div>
   );
 }
@@ -761,6 +848,7 @@ interface ActionBarProps {
   onToggleSources: () => void;
   onCopy: () => void;
   onSave: () => void;
+  onOpenSource?: (idx: number) => void;
   onToast: (msg: string, type: 'success' | 'error' | 'warning') => void;
 }
 
@@ -775,7 +863,7 @@ const PRIMARY_ACTIONS: { id: ActionType; icon: string; label: string }[] = [
 function ActionBar({
   msgId, msgContent, sources, sourcesVisible,
   loadingKey, isCopied, isSaved, disabled,
-  onAction, onToggleSources, onCopy, onSave, onToast,
+  onAction, onToggleSources, onCopy, onSave, onOpenSource, onToast,
 }: ActionBarProps) {
   return (
     <div>
@@ -837,16 +925,17 @@ function ActionBar({
       {/* ── Sources panel (toggleable) ── */}
       {sourcesVisible && sources.length > 0 && (
         <div className="sources-panel">
-          <div className="sources-panel-title">Sources</div>
+          <div className="sources-panel-title">Document Sources</div>
           <div className="sources-panel-tags">
             {sources.map((src, i) => (
               <div
                 key={i}
                 className="source-tag"
-                title={`${src.fileName}\nRelevance: ${Math.round(src.similarity * 100)}%\n\n"${src.contentSnippet}"`}
-                onClick={() => onToast(
+                title={`${src.fileName} · ${Math.round(src.similarity * 100)}% — click to view chunk`}
+                onClick={() => onOpenSource ? onOpenSource(i) : onToast(
                   `From "${src.fileName}" · ${Math.round(src.similarity * 100)}% match`, 'success'
                 )}
+                style={{ cursor: 'pointer' }}
               >
                 <FileText size={10} />
                 <span>{src.fileName}</span>
@@ -858,6 +947,91 @@ function ActionBar({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Source Drawer ─────────────────────────────────────────────────────────────
+
+function SourceDrawer({
+  sources,
+  index,
+  onClose,
+  onChange,
+}: {
+  sources: RagSource[];
+  index: number;
+  onClose: () => void;
+  onChange: (idx: number) => void;
+}) {
+  const src = sources[index];
+  const sim = Math.round(src.similarity * 100);
+  const HIGHLIGHT_LEN = 180;
+  const simColor =
+    sim >= 70 ? 'hsl(142, 72%, 55%)' :
+    sim >= 50 ? 'hsl(45, 93%, 65%)' :
+                'hsl(22, 92%, 65%)';
+
+  return (
+    <div className="source-drawer-overlay" onClick={onClose}>
+      <div className="source-drawer" onClick={e => e.stopPropagation()}>
+        {/* Drag handle */}
+        <div className="source-drawer-handle" />
+
+        {/* Header */}
+        <div className="source-drawer-header">
+          <div>
+            <div className="source-drawer-subtitle">Source {index + 1} of {sources.length}</div>
+            <div className="source-drawer-filename">📄 {src.fileName}</div>
+          </div>
+          <button className="source-drawer-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        {/* Similarity bar */}
+        <div className="source-drawer-sim">
+          <span className="source-sim-value" style={{ color: simColor }}>{sim}% match</span>
+          <div className="source-sim-track">
+            <div
+              className="source-sim-fill"
+              style={{ width: `${sim}%`, background: simColor }}
+            />
+          </div>
+        </div>
+
+        {/* Chunk content with highlighted snippet */}
+        <div className="source-content-box">
+          <div className="source-content-label">Retrieved chunk · {src.content.length} chars</div>
+          <div className="source-content-text">
+            <span className="source-highlight">
+              {src.content.substring(0, HIGHLIGHT_LEN)}
+            </span>
+            <span className="source-rest">
+              {src.content.substring(HIGHLIGHT_LEN)}
+            </span>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        {sources.length > 1 && (
+          <div className="source-drawer-nav">
+            <button
+              className="source-nav-btn"
+              disabled={index === 0}
+              onClick={() => onChange(index - 1)}
+            >
+              ◀ Prev
+            </button>
+            <span className="source-nav-counter">{index + 1} / {sources.length}</span>
+            <button
+              className="source-nav-btn"
+              disabled={index === sources.length - 1}
+              onClick={() => onChange(index + 1)}
+            >
+              Next ▶
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
