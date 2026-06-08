@@ -254,7 +254,10 @@ export default function ChatInterface({
   const [selectedDocs, setSelectedDocs] = useState<Document[]>(initialSelectedDocs);
 
   const [input, setInput] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth > 768 : true;
+  });
+  const [docsExpanded, setDocsExpanded] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -275,6 +278,28 @@ export default function ChatInterface({
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sticky Action Bar dynamic fade indicator scroll checking
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const [showLeftFade, setShowLeftFade] = useState(false);
+  const [showRightFade, setShowRightFade] = useState(false);
+
+  const lastMsg = messages[messages.length - 1];
+  const showStickyActions = lastMsg && lastMsg.sender_role === 'assistant' && !generating;
+
+  const checkScroll = useCallback(() => {
+    const el = actionBarRef.current;
+    if (!el) return;
+    setShowLeftFade(el.scrollLeft > 10);
+    setShowRightFade(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkScroll();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [showStickyActions, checkScroll, messages.length]);
 
   const openDrawer = (sources: RagSource[], idx: number) => {
     setDrawerSources(sources);
@@ -547,8 +572,13 @@ export default function ChatInterface({
   return (
     <div className="chat-workspace">
 
+      {/* ── Sidebar Backdrop for Mobile ── */}
+      {sidebarOpen && (
+        <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* ── Sidebar ── */}
-      <div className={`chat-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <div className={`chat-sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
         {/* Mobile close button */}
         <button
           onClick={() => setSidebarOpen(false)}
@@ -631,7 +661,7 @@ export default function ChatInterface({
         {/* Header */}
         <div className="chat-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button className="btn-icon mobile-sidebar-toggle"
+            <button className="btn-icon sidebar-toggle-btn"
               onClick={() => setSidebarOpen(v => !v)}
               style={{ width: 34, height: 34 }}>
               <Menu size={16} />
@@ -650,30 +680,64 @@ export default function ChatInterface({
         </div>
 
         {/* Document context chips */}
-        <div className="doc-selection-drawer">
-          <div className="drawer-title">Context Documents — click to toggle</div>
-          {allDocuments.length === 0 ? (
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-              No documents uploaded yet.{' '}
-              <button onClick={onBackToDashboard}
-                style={{ background: 'none', border: 'none', color: 'var(--primary-light)',
-                  cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 'inherit' }}>
-                Go to dashboard
-              </button>{' '}
-              to upload files.
-            </p>
-          ) : (
-            <div className="doc-chip-container">
-              {allDocuments.map(doc => (
-                <div key={doc.id}
-                  className={`doc-chip ${selectedDocs.some(d => d.id === doc.id) ? 'selected' : ''}`}
-                  onClick={() => toggleDoc(doc)}>
-                  <FileText size={11} />
-                  <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {doc.file_name}
-                  </span>
+        <div className={`doc-selection-drawer ${docsExpanded ? 'expanded' : 'collapsed'}`}>
+          <button
+            type="button"
+            className="doc-drawer-toggle"
+            onClick={() => setDocsExpanded(!docsExpanded)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '10px 16px',
+              color: 'var(--text-secondary)',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={14} style={{ color: selectedDocs.length > 0 ? 'var(--primary-light)' : 'var(--text-muted)' }} />
+              <span>
+                {selectedDocs.length === 0
+                  ? 'No documents selected as context'
+                  : `${selectedDocs.length} active document${selectedDocs.length > 1 ? 's' : ''}`}
+              </span>
+            </div>
+            <span className="doc-drawer-toggle-arrow" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', transition: 'transform var(--transition-fast)', transform: docsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </span>
+          </button>
+
+          {docsExpanded && (
+            <div className="doc-drawer-content" style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border-color)', marginTop: '8px', paddingTop: '12px' }}>
+              {allDocuments.length === 0 ? (
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                  No documents uploaded yet.{' '}
+                  <button onClick={onBackToDashboard}
+                    style={{ background: 'none', border: 'none', color: 'var(--primary-light)',
+                      cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 'inherit' }}>
+                    Go to dashboard
+                  </button>{' '}
+                  to upload files.
+                </p>
+              ) : (
+                <div className="doc-chip-container">
+                  {allDocuments.map(doc => (
+                    <div key={doc.id}
+                      className={`doc-chip ${selectedDocs.some(d => d.id === doc.id) ? 'selected' : ''}`}
+                      onClick={() => toggleDoc(doc)}>
+                      <FileText size={11} />
+                      <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {doc.file_name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
@@ -725,7 +789,7 @@ export default function ChatInterface({
             </div>
           ) : (
             <>
-              {messages.map(msg => (
+              {messages.map((msg, idx) => (
                 <div key={msg.id} className={`message-bubble ${msg.sender_role}`}>
                   <div className="message-content">
                     {msg.sender_role === 'user'
@@ -738,8 +802,8 @@ export default function ChatInterface({
                     }
                   </div>
 
-                  {/* Action bar — only for completed assistant messages */}
-                  {msg.sender_role === 'assistant' && (
+                  {/* Action bar — only for completed assistant messages, but hide for the latest message while the sticky bar is shown */}
+                  {msg.sender_role === 'assistant' && (idx !== messages.length - 1) && (
                     <ActionBar
                       msgId={msg.id}
                       msgContent={msg.content}
@@ -777,6 +841,85 @@ export default function ChatInterface({
           <div ref={bottomRef} />
         </div>
 
+        {/* Sticky Sources panel for the active/last message when toggled */}
+        {showStickyActions && visibleSourceIds.has(lastMsg.id) && lastMsg.sources && (lastMsg.sources as RagSource[]).length > 0 && (
+          <div className="sticky-sources-panel">
+            <div className="sources-panel-title">Document Sources</div>
+            <div className="sources-panel-tags">
+              {(lastMsg.sources as RagSource[]).map((src, i) => (
+                <div
+                  key={i}
+                  className="source-tag"
+                  title={`${src.fileName} · ${Math.round(src.similarity * 100)}% — click to view chunk`}
+                  onClick={() => openDrawer(lastMsg.sources as RagSource[], i)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <FileText size={10} />
+                  <span>{src.fileName}</span>
+                  <span style={{ opacity: 0.6, fontSize: '0.7rem' }}>
+                    {Math.round(src.similarity * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sticky Bottom Action Bar for the active/last assistant answer */}
+        {showStickyActions && (
+          <div className="sticky-action-bar-wrap">
+            <div className={`fade-indicator-left ${showLeftFade ? 'visible' : ''}`} />
+            <div ref={actionBarRef} className="sticky-action-bar" onScroll={checkScroll}>
+              {PRIMARY_ACTIONS.map(({ id, icon, label }) => {
+                const key = `${lastMsg.id}-${id}`;
+                const isLoading = actionLoadingKey === key;
+                return (
+                  <button
+                    key={id}
+                    className={`sticky-action-btn ${isLoading ? 'loading' : ''}`}
+                    disabled={generating || (actionLoadingKey !== null && !isLoading)}
+                    onClick={() => handleActionQuery(id, lastMsg.id, lastMsg.content)}
+                    title={label}
+                  >
+                    <span className="action-btn-icon">{isLoading ? '⏳' : icon}</span>
+                    {label}
+                  </button>
+                );
+              })}
+
+              <div className="sticky-action-divider" />
+
+              {/* Utility buttons */}
+              {lastMsg.sources && (lastMsg.sources as RagSource[]).length > 0 && (
+                <button
+                  className={`sticky-action-btn-util ${visibleSourceIds.has(lastMsg.id) ? 'active' : ''}`}
+                  onClick={() => handleToggleSources(lastMsg.id)}
+                  title={visibleSourceIds.has(lastMsg.id) ? 'Hide sources' : 'Show sources'}
+                >
+                  📄 Sources
+                </button>
+              )}
+
+              <button
+                className={`sticky-action-btn-util ${copiedId === lastMsg.id ? 'copied' : ''}`}
+                onClick={() => handleCopy(lastMsg.id, lastMsg.content)}
+                title={copiedId === lastMsg.id ? 'Copied!' : 'Copy answer'}
+              >
+                {copiedId === lastMsg.id ? '✓' : '⎘'} Copy
+              </button>
+
+              <button
+                className={`sticky-action-btn-util ${savedIds.has(lastMsg.id) ? 'saved' : ''}`}
+                onClick={() => handleSaveAnswer(lastMsg.id, lastMsg.content)}
+                title={savedIds.has(lastMsg.id) ? 'Saved!' : 'Save to notebook'}
+              >
+                {savedIds.has(lastMsg.id) ? '🔖' : '📌'} Save
+              </button>
+            </div>
+            <div className={`fade-indicator-right ${showRightFade ? 'visible' : ''}`} />
+          </div>
+        )}
+
         {/* Input bar */}
         <div className="chat-input-container">
           <form onSubmit={handleSend} className="chat-input-wrapper">
@@ -808,17 +951,6 @@ export default function ChatInterface({
           </p>
         </div>
       </div>
-
-      {/* Responsive helpers */}
-      <style>{`
-        @media (max-width: 768px) {
-          .mobile-sidebar-toggle { display: flex !important; }
-          .sidebar-close-btn { display: flex !important; }
-        }
-        @media (min-width: 769px) {
-          .mobile-sidebar-toggle { display: none !important; }
-        }
-      `}</style>
 
       {/* ── Source drawer overlay ── */}
       {drawerSources.length > 0 && (

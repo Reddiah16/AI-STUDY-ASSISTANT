@@ -382,6 +382,8 @@ button, input, textarea, select {
   display: flex;
   flex: 1;
   height: 100vh;
+  position: relative;
+  overflow: hidden;
   animation: fadeIn var(--transition-normal);
 }
 
@@ -391,7 +393,31 @@ button, input, textarea, select {
   background: var(--bg-surface);
   display: flex;
   flex-direction: column;
-  transition: transform var(--transition-normal);
+  transition: width var(--transition-normal), transform var(--transition-normal), border-color var(--transition-normal);
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 101;
+}
+
+.chat-sidebar.collapsed {
+  width: 0;
+  border-right: none;
+}
+
+/* Sidebar backdrop overlay on mobile */
+.sidebar-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 6, 12, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  animation: fadeIn var(--transition-fast) forwards;
+}
+
+@media (min-width: 769px) {
+  .sidebar-backdrop {
+    display: none;
+  }
 }
 
 @media (max-width: 768px) {
@@ -400,12 +426,18 @@ button, input, textarea, select {
     left: 0;
     top: 0;
     bottom: 0;
-    z-index: 100;
+    width: 280px;
     transform: translateX(-100%);
+    transition: transform var(--transition-normal);
   }
   .chat-sidebar.open {
     transform: translateX(0);
-    box-shadow: 20px 0 40px rgba(0,0,0,0.5);
+    width: 280px;
+    box-shadow: 20px 0 40px rgba(0, 0, 0, 0.6);
+  }
+  .chat-sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 280px;
   }
 }
 
@@ -415,6 +447,7 @@ button, input, textarea, select {
   flex-direction: column;
   background: var(--bg-base);
   height: 100%;
+  min-width: 0; /* Prevents flex items from overflowing horizontally */
 }
 
 .chat-header {
@@ -425,6 +458,13 @@ button, input, textarea, select {
   justify-content: space-between;
   padding: 0 24px;
   background: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .chat-header {
+    padding: 0 16px;
+  }
 }
 
 .chat-messages-container {
@@ -433,7 +473,14 @@ button, input, textarea, select {
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px; /* Increased spacing between message blocks */
+}
+
+@media (max-width: 768px) {
+  .chat-messages-container {
+    padding: 16px;
+    gap: 16px;
+  }
 }
 
 .message-bubble {
@@ -452,6 +499,19 @@ button, input, textarea, select {
   align-self: flex-start;
   width: 100%;
   max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .message-bubble {
+    max-width: 100%;
+  }
+  .message-bubble.assistant {
+    align-self: stretch;
+  }
+  .message-bubble.user {
+    max-width: 85%;
+    align-self: flex-end;
+  }
 }
 
 .message-content {
@@ -616,25 +676,26 @@ button, input, textarea, select {
 
 /* Document Selection Overlay in Chat */
 .doc-selection-drawer {
-  padding: 16px;
+  padding: 0;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(14, 18, 28, 0.4);
+  background: rgba(14, 18, 28, 0.3);
+  transition: background var(--transition-fast);
+  flex-shrink: 0;
 }
-.drawer-title {
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  margin-bottom: 8px;
+.doc-selection-drawer.expanded {
+  background: rgba(14, 18, 28, 0.6);
 }
+
 .doc-chip-container {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
 .doc-chip {
-  font-size: 0.8rem;
-  padding: 6px 12px;
+  font-size: 0.82rem;
+  padding: 8px 16px; /* Increased touch targets */
   border-radius: 20px;
   border: 1px solid var(--border-color);
   background: var(--bg-surface);
@@ -643,6 +704,7 @@ button, input, textarea, select {
   align-items: center;
   gap: 6px;
   transition: all var(--transition-fast);
+  height: 36px; /* Good touch target height */
 }
 .doc-chip.selected {
   background: var(--primary-glow);
@@ -1275,4 +1337,179 @@ button, input, textarea, select {
   background: hsla(45, 93%, 58%, 0.06);
   border: 1px solid hsla(45, 93%, 58%, 0.2);
   color: hsl(45, 93%, 65%);
+}
+
+/* ── Sticky Bottom Action Bar ─────────────────────────────────────────── */
+.sticky-action-bar-wrap {
+  position: relative;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  z-index: 10;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+}
+
+.sticky-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+  width: 100%;
+  padding: 4px 0;
+  -webkit-overflow-scrolling: touch;
+}
+.sticky-action-bar::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Safari/Chrome */
+}
+
+/* Scroll Fade Indicators */
+.fade-indicator-left,
+.fade-indicator-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 2;
+  opacity: 0;
+}
+
+.fade-indicator-left {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-surface) 25%, transparent);
+}
+.fade-indicator-left.visible {
+  opacity: 1;
+}
+
+.fade-indicator-right {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-surface) 25%, transparent);
+}
+.fade-indicator-right.visible {
+  opacity: 1;
+}
+
+/* Sticky Action Buttons (Large Touch Targets) */
+.sticky-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 40px; /* Comfortable height */
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+.sticky-action-btn:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+.sticky-action-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+.sticky-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sticky-action-btn.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.sticky-action-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Sticky Utility Buttons */
+.sticky-action-btn-util {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  height: 40px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sticky-action-btn-util:hover:not(:disabled) {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.sticky-action-btn-util:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.sticky-action-btn-util.active {
+  background: var(--bg-surface-hover);
+  color: var(--primary-light);
+  border-color: var(--primary);
+}
+.sticky-action-btn-util.copied {
+  color: var(--success);
+  border-color: var(--success);
+  background: hsla(142, 72%, 45%, 0.08);
+}
+.sticky-action-btn-util.saved {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: hsla(45, 93%, 58%, 0.08);
+}
+
+/* Sticky Sources Panel */
+.sticky-sources-panel {
+  padding: 12px 18px;
+  background: var(--bg-surface-elevated);
+  border-top: 1px solid var(--border-color);
+  animation: slideUp 0.2s ease-out;
+  flex-shrink: 0;
+}
+
+/* Additional touch targets & responsive styling for inputs */
+@media (max-width: 768px) {
+  .chat-input-container {
+    padding: 12px 16px;
+  }
+  .chat-input-wrapper {
+    gap: 8px;
+  }
+  .chat-input-box {
+    font-size: 0.95rem;
+    height: 48px;
+    border-radius: 12px;
+  }
+  
+  .btn-icon.sidebar-toggle-btn {
+    width: 40px !important;
+    height: 40px !important;
+  }
 }
