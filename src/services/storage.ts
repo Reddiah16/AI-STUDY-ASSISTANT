@@ -87,7 +87,37 @@ async function extractContentText(file: File): Promise<string> {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        
+        // Filter out marked content and keep only TextItems (which contain str and transform)
+        const textItems = (textContent.items as unknown[]).filter((item): item is { str: string; transform: number[] } => 
+          !!item && typeof item === 'object' && 'str' in item && 'transform' in item
+        );
+        
+        // Sort items: top to bottom, then left to right
+        const sortedItems = [...textItems].sort((a, b) => {
+          const yDiff = b.transform[5] - a.transform[5];
+          if (Math.abs(yDiff) > 5) {
+            return yDiff;
+          }
+          return a.transform[4] - b.transform[4];
+        });
+
+        let pageText = '';
+        let lastY: number | null = null;
+        for (const item of sortedItems) {
+          const y = item.transform[5];
+          const str = item.str;
+          
+          if (lastY !== null && Math.abs(y - lastY) > 5) {
+            pageText += '\n';
+          } else if (pageText !== '' && !pageText.endsWith('\n') && !pageText.endsWith(' ')) {
+            pageText += ' ';
+          }
+          
+          pageText += str;
+          lastY = y;
+        }
+        
         fullText += pageText + '\n\n';
       }
       

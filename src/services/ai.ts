@@ -229,47 +229,80 @@ export class MockLlmProvider implements LlmProvider {
           });
         }
 
-        // Find relevant sources based on keyword matching
+        // Clean and extract sentences with source mapping
+        const sentences: { text: string; sourceIdx: number }[] = [];
+        sources.forEach(src => {
+          const cleanText = src.content
+            .replace(/\.{2,}/g, ' ')
+            .replace(/[•●▪◦■☑✓]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          // Split by punctuation or newlines
+          const split = cleanText.split(/\n+|(?<=[.!?])\s+/);
+          split.forEach(s => {
+            const cleanedSentence = s.trim();
+            if (cleanedSentence.length > 20) {
+              sentences.push({ text: cleanedSentence, sourceIdx: src.index });
+            }
+          });
+        });
+
+        // Clean query words for matching
         const queryWords = query
           .toLowerCase()
           .replace(/[^a-z0-9\s]/g, "")
           .split(/\s+/)
           .filter(w => w.length > 3 && !['what', 'how', 'does', 'explain', 'why', 'where', 'when', 'who', 'which', 'about', 'from', 'with', 'your', 'study'].includes(w));
 
-        const scoredSources = sources.map(src => {
+        // Score sentences by matching keywords
+        const scoredSentences = sentences.map(s => {
           let score = 0;
-          const contentLower = src.content.toLowerCase();
+          const textLower = s.text.toLowerCase();
           queryWords.forEach(word => {
-            if (contentLower.includes(word)) {
-              score += 1;
+            if (textLower.includes(word)) {
+              score += 3;
             }
           });
-          return { ...src, score };
+          score += Math.min(2, s.text.length / 60);
+          return { ...s, score };
         });
 
-        // Sort by score desc, select top sources
-        const sortedSources = scoredSources.sort((a, b) => b.score - a.score);
-        const topSources = sortedSources.filter(s => s.score > 0 || sortedSources.indexOf(s) < 2);
+        // Sort by score descending and select top 4 most relevant sentences
+        const relevantSentences = scoredSentences
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 4);
 
-        body += `Based on your selected study materials, here is a detailed breakdown answering: **"${query}"**\n\n`;
-        
-        body += `#### Key Summary from Documents:\n`;
-        topSources.slice(0, 2).forEach((src, idx) => {
-          const sentences = src.content.split(/[.!?]+/);
-          const brief = (sentences[0] || '').trim() + (sentences[1] ? '. ' + sentences[1].trim() : '') + '.';
-          body += `${idx + 1}. **Source ${src.index} Highlight:** ${brief || src.content.substring(0, 150) + '...'} (Grounding Reference: **[Source ${src.index}]**)\n`;
+        // Group sentences by source to build a structured report
+        const sentencesBySource: Record<number, string[]> = {};
+        relevantSentences.forEach(s => {
+          if (!sentencesBySource[s.sourceIdx]) {
+            sentencesBySource[s.sourceIdx] = [];
+          }
+          sentencesBySource[s.sourceIdx].push(s.text);
         });
 
-        body += `\n#### Academic Context:\n`;
-        const primarySource = topSources[0];
-        if (primarySource) {
-          body += `The study document states the following context in **[Source ${primarySource.index}]**:\n`;
-          body += `> "... ${primarySource.content.substring(0, 300)}${primarySource.content.length > 300 ? '...' : ''} ..."\n\n`;
-        }
+        body += `Here is a comprehensive synthesis of the selected study materials answering your question: **"${query}"**\n\n`;
 
-        body += `#### Study & Revision Suggestions:\n`;
-        body += `- **Key Vocabulary:** Focus on key terms retrieved in these sections (e.g., ${queryWords.slice(0, 3).join(', ') || 'underlined terms'}).\n`;
-        body += `- **Concept Mapping:** Draw connection lines between these source segments to reinforce your memory.\n\n`;
+        body += `### 📘 Key Concepts Analysis\n\n`;
+        Object.entries(sentencesBySource).forEach(([sourceIdx, list]) => {
+          body += `#### Section Reference: [Source ${sourceIdx}]\n`;
+          list.forEach(sentence => {
+            body += `- ${sentence}\n`;
+          });
+          body += `\n`;
+        });
+
+        body += `### 📝 Synthesized Summary\n`;
+        const paragraph = relevantSentences
+          .map(s => `${s.text} [Source ${s.sourceIdx}].`)
+          .map(s => s.replace(/\.+/g, '.'))
+          .join(' ');
+        body += `${paragraph}\n\n`;
+
+        body += `### 💡 Study & Revision Tips\n`;
+        body += `- **Review Vocabulary:** Pay special attention to terms like: **${queryWords.map(w => w.toUpperCase()).join(', ') || 'key definitions'}** in the source texts.\n`;
+        body += `- **Connection Exercise:** Map the points in **[Source ${Object.keys(sentencesBySource).join(', ')}]** to understand how they influence the broader subject.\n\n`;
       } else {
         body += `To answer **"${query}"**, let's look at standard academic principles:\n\n`;
         body += `1. **Core Concept:** Standard revision indicates that breaking down complex questions into sub-questions is key. For this topic, first examine its base definitions.\n`;

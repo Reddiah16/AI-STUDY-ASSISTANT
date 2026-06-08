@@ -64,14 +64,20 @@ async function retrieveRelevantChunks(
   documentIds: string[],
   topK = 4
 ): Promise<DocumentChunk[]> {
-  if (documentIds.length === 0) return [];
+  console.info(`[RAG Retrieval] Initiating search for query: "${query}" across ${documentIds.length} document(s).`);
+
+  if (documentIds.length === 0) {
+    console.warn('[RAG Retrieval] Failed retrieval: No documents were selected for context.');
+    return [];
+  }
 
   if (isSupabaseConfigured) {
     try {
-      // 1. Generate query embedding
+      console.info('[RAG Retrieval] Generating query embedding via configured provider...');
       const queryEmbedding = await generateEmbedding(query);
+      console.info('[RAG Retrieval] Query embedding generated successfully.');
 
-      // 2. Query Supabase vector storage using the pgvector RPC similarity search
+      console.info(`[RAG Retrieval] Querying Supabase match_document_chunks RPC with threshold 0.2, topK=${topK}...`);
       const { data, error } = await supabase.rpc('match_document_chunks', {
         query_embedding: queryEmbedding,
         match_threshold: 0.2, // Low threshold to capture relevant context
@@ -80,26 +86,50 @@ async function retrieveRelevantChunks(
       });
 
       if (error) {
-        console.warn('Supabase pgvector RPC search failed, falling back to client search:', error.message);
-      } else if (data && data.length > 0) {
-        return data.map((item: any) => ({
-          id: item.id,
-          documentId: item.document_id,
-          content: item.content,
-          similarity: item.similarity,
-        }));
+        console.error(`[RAG Retrieval] Supabase pgvector RPC search failed: ${error.message}. Falling back to client-side search.`);
+      } else {
+        const resultsCount = data?.length ?? 0;
+        if (resultsCount > 0) {
+          console.info(`[RAG Retrieval] Successfully retrieved ${resultsCount} chunk(s) from Supabase.`);
+          data.forEach((item: any, index: number) => {
+            console.info(`  - Chunk #${index + 1}: ID=${item.id}, DocumentID=${item.document_id}, Similarity=${(item.similarity * 100).toFixed(1)}%, Snippet="${item.content.substring(0, 80).replace(/\n/g, ' ')}..."`);
+          });
+          return data.map((item: any) => ({
+            id: item.id,
+            documentId: item.document_id,
+            content: item.content,
+            similarity: item.similarity,
+          }));
+        } else {
+          console.warn(`[RAG Retrieval] Failed retrieval: Supabase search returned 0 matching chunks for query "${query}".`);
+        }
       }
-    } catch (err) {
-      console.warn('Vector search exception, falling back:', err);
+    } catch (err: any) {
+      console.error('[RAG Retrieval] Vector search exception occurred:', err, 'Falling back to client-side search.');
     }
   }
 
-  // Local fallback/demo flow:
-  // 1. Pull all stored chunks for the selected documents
-  const allChunks = await getDocumentChunks(documentIds);
+  console.info('[RAG Retrieval] Running client-side fallback retrieval.');
+  try {
+    const allChunks = await getDocumentChunks(documentIds);
+    console.info(`[RAG Retrieval] Loaded ${allChunks.length} total chunks from storage for selected documents.`);
 
-  // 2. Score + rank chunks using local TF-IDF approximation
-  return queryMockVectorStore(query, allChunks, topK);
+    const matched = await queryMockVectorStore(query, allChunks, topK);
+    const resultsCount = matched.length;
+
+    if (resultsCount > 0) {
+      console.info(`[RAG Retrieval] Successfully retrieved ${resultsCount} chunk(s) via client-side fallback.`);
+      matched.forEach((chunk, index) => {
+        console.info(`  - Fallback Chunk #${index + 1}: ID=${chunk.id}, DocumentID=${chunk.documentId}, Similarity=${((chunk.similarity ?? 0.5) * 100).toFixed(1)}%, Snippet="${chunk.content.substring(0, 80).replace(/\n/g, ' ')}..."`);
+      });
+    } else {
+      console.warn(`[RAG Retrieval] Failed retrieval: Fallback search returned 0 matching chunks for query "${query}".`);
+    }
+    return matched;
+  } catch (fallbackErr: any) {
+    console.error('[RAG Retrieval] Fallback search failed entirely:', fallbackErr);
+    return [];
+  }
 }
 
 // ─── Main Entry Point ──────────────────────────────────────────────────────────
@@ -123,6 +153,7 @@ export async function ragAnswer(
   const { query, documentIds, documentNames } = request;
   const { onChunk, onComplete, onError } = callbacks;
 
+  console.info(`[RAG Pipeline] Processing prompt. SessionId=${request.sessionId}`);
   try {
     // ── Step 1: Retrieve ───────────────────────────────────────────────────
     const matchedChunks = await retrieveRelevantChunks(query, documentIds);
@@ -143,13 +174,20 @@ export async function ragAnswer(
     }));
 
     // ── Step 3: Stream answer ──────────────────────────────────────────────
+    console.info(`[RAG Pipeline] Initiating streaming grounded answer generation using ${matchedChunks.length} chunks.`);
     await streamGroundedAnswer(
       query,
       matchedChunks,
       documentNames,
       (partialText) => onChunk(partialText),
-      (fullText) => onComplete(fullText, sources),
-      (error) => onError(error)
+      (fullText) => {
+        console.info(`[RAG Pipeline] Answer generation completed successfully. Output length: ${fullText.length} characters.`);
+        onComplete(fullText, sources);
+      },
+      (error) => {
+        console.error('[RAG Pipeline] Error during streaming answer generation:', error);
+        onError(error);
+      }
     );
 
     /*
@@ -175,6 +213,8 @@ export async function ragAnswer(
      * ───────────────────────────────────────────────────────────────────────
      */
   } catch (err) {
-    onError(err instanceof Error ? err : new Error(String(err)));
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    console.error('[RAG Pipeline] Execution failed:', errorObj);
+    onError(errorObj);
   }
 }
