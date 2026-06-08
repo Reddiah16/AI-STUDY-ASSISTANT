@@ -1590,13 +1590,14 @@ export default function ChatInterface({
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
               <div className={`fade-indicator-left ${showLeftFade ? 'visible' : ''}`} />
               <div ref={actionBarRef} className="sticky-action-bar" onScroll={checkScroll}>
-                {PRIMARY_ACTIONS.map(({ id, icon, label }) => {
+                {PRIMARY_ACTIONS.map(({ id, icon, label }, i) => {
                   const key = `${lastMsg.id}-${id}`;
                   const isLoading = actionLoadingKey === key;
+                  const isPrimary = i === 0;
                   return (
                     <button
                       key={id}
-                      className={`sticky-action-btn ${isLoading ? 'loading' : ''}`}
+                      className={`sticky-action-btn${isPrimary ? ' primary' : ''} ${isLoading ? 'loading' : ''}`}
                       disabled={generating || (actionLoadingKey !== null && !isLoading)}
                       onClick={() => handleActionQuery(id, lastMsg.id, lastMsg.content)}
                       title={label}

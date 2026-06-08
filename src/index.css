@@ -923,9 +923,16 @@ button, input, textarea, select {
 .action-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 2px 2px;
+  padding: 8px 12px;
+  background: hsla(223, 30%, 6%, 0.15); /* Premium integrated container */
+  border: 1px solid hsla(217, 20%, 30%, 0.22);
+  border-radius: 12px;
+  margin-top: 14px;
+  max-width: 740px;
+  margin-left: auto;
+  margin-right: auto;
   animation: fadeIn 0.25s ease-out;
 }
 
@@ -940,60 +947,66 @@ button, input, textarea, select {
 .action-bar-utils {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
-  border-left: 1px solid var(--border-color);
-  padding-left: 8px;
+  border-left: 1px solid hsla(217, 20%, 30%, 0.35); /* Clean vertical divider */
+  padding-left: 12px;
   margin-left: 2px;
+  height: 22px; /* Divider height matching button vertical centers */
 }
 
+/* Base button under answers */
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  border-radius: 20px;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 32px; /* Uniform compact height */
+  border-radius: 8px; /* Matching card language */
   border: 1px solid var(--border-color);
-  background: var(--bg-surface-elevated);
+  background: rgba(255, 255, 255, 0.03); /* Subtle secondary background */
   color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: 0.76rem;
+  font-weight: 550;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
-  line-height: 1;
   user-select: none;
 }
 .action-btn:hover:not(:disabled) {
-  background: var(--bg-surface-hover);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
-  border-color: var(--text-muted);
+  border-color: hsla(217, 20%, 45%, 0.4);
   transform: translateY(-1px);
 }
 .action-btn:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.97);
 }
 .action-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Primary action button */
+/* DOMINANT PRIMARY BUTTON (Summarize) */
 .action-btn.primary {
-  background: var(--primary-glow);
-  border-color: hsla(250, 89%, 65%, 0.5);
-  color: var(--primary-light);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: var(--text-primary) !important;
+  border: none;
   font-weight: 600;
+  box-shadow: 0 4px 12px var(--primary-glow);
 }
 .action-btn.primary:hover:not(:disabled) {
-  background: hsla(250, 89%, 65%, 0.25);
-  border-color: var(--primary-light);
-  color: var(--text-primary);
-  box-shadow: 0 0 12px var(--primary-glow);
+  filter: brightness(1.1);
+  box-shadow: 0 6px 16px rgba(250, 89, 166, 0.35);
+  transform: translateY(-1px);
+}
+.action-btn.primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
 }
 
-/* Loading state */
+/* Loading state spinner */
 .action-btn.loading {
   pointer-events: none;
   opacity: 0.7;
@@ -1003,20 +1016,20 @@ button, input, textarea, select {
   display: inline-block;
 }
 
-/* Active / toggled state */
+/* Active toggled state */
 .action-btn.active {
   background: var(--bg-surface-hover);
   color: var(--primary-light);
   border-color: var(--primary);
 }
 
-/* Utility icon-only buttons */
+/* Compact utility buttons */
 .action-btn-util {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   background: transparent;
@@ -1027,9 +1040,9 @@ button, input, textarea, select {
   flex-shrink: 0;
 }
 .action-btn-util:hover:not(:disabled) {
-  background: var(--bg-surface-elevated);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
-  border-color: var(--text-muted);
+  border-color: hsla(217, 20%, 45%, 0.4);
 }
 .action-btn-util:disabled {
   opacity: 0.4;
@@ -1038,10 +1051,12 @@ button, input, textarea, select {
 .action-btn-util.copied {
   color: var(--success);
   border-color: var(--success);
+  background: hsla(142, 72%, 45%, 0.08);
 }
 .action-btn-util.saved {
   color: var(--warning);
   border-color: var(--warning);
+  background: hsla(45, 93%, 58%, 0.08);
 }
 
 /* Sources panel that slides open */
@@ -1410,29 +1425,29 @@ button, input, textarea, select {
   opacity: 1;
 }
 
-/* Sticky Action Buttons (Large Touch Targets) */
+/* Sticky Action Buttons (Comfortable Touch Targets) */
 .sticky-action-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 16px;
-  height: 40px; /* Comfortable height */
-  border-radius: 20px;
+  padding: 0 14px;
+  height: 36px; /* Optimized height */
+  border-radius: 8px; /* Matching rounded theme */
   border: 1px solid var(--border-color);
-  background: var(--bg-surface-elevated);
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 0.82rem;
-  font-weight: 500;
+  font-size: 0.8rem;
+  font-weight: 550;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
   user-select: none;
 }
 .sticky-action-btn:hover:not(:disabled) {
-  background: var(--bg-surface-hover);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
-  border-color: var(--text-muted);
+  border-color: hsla(217, 20%, 45%, 0.4);
   transform: translateY(-1px);
 }
 .sticky-action-btn:active:not(:disabled) {
@@ -1443,6 +1458,23 @@ button, input, textarea, select {
   cursor: not-allowed;
 }
 
+/* DOMINANT PRIMARY BUTTON (Sticky Bar) */
+.sticky-action-btn.primary {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: var(--text-primary) !important;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+.sticky-action-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 16px rgba(250, 89, 166, 0.35);
+  transform: translateY(-1px);
+}
+.sticky-action-btn.primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+}
+
 .sticky-action-btn.loading {
   pointer-events: none;
   opacity: 0.7;
@@ -1451,8 +1483,8 @@ button, input, textarea, select {
 .sticky-action-divider {
   width: 1px;
   height: 20px;
-  background: var(--border-color);
-  margin: 0 4px;
+  background: hsla(217, 20%, 30%, 0.35);
+  margin: 0 6px;
   flex-shrink: 0;
 }
 
@@ -1462,23 +1494,23 @@ button, input, textarea, select {
   align-items: center;
   gap: 6px;
   padding: 0 14px;
-  height: 40px;
-  border-radius: 20px;
+  height: 36px;
+  border-radius: 8px;
   border: 1px solid var(--border-color);
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-body);
-  font-size: 0.82rem;
-  font-weight: 500;
+  font-size: 0.8rem;
+  font-weight: 550;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .sticky-action-btn-util:hover:not(:disabled) {
-  background: var(--bg-surface-elevated);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
-  border-color: var(--text-muted);
+  border-color: hsla(217, 20%, 45%, 0.4);
 }
 .sticky-action-btn-util:disabled {
   opacity: 0.4;
