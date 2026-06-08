@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   fetchChatSessions, createChatSession, deleteChatSession,
   fetchChatMessages, saveChatMessage,
@@ -10,8 +10,31 @@ import {
   MessageSquare, Plus, Trash2, Send, FileText,
   Sparkles, BookOpen, ArrowLeft, Menu, X,
 } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 type ActionType = 'summarize' | 'explain' | 'bullets' | 'quiz' | 'flashcards';
+
+export type StudyMode = 'normal' | 'simple' | 'exam' | 'revision' | 'flashcard' | 'quiz';
+
+export const STUDY_TAGS = ['Important', 'Definitions', 'Needs Revision'];
+
+export const STUDY_MODE_PROMPTS: Record<StudyMode, string> = {
+  normal: '',
+  simple: '\n[STUDY MODE: Simple Explanation] Format the output as a simple explanation using everyday language and an intuitive analogy or a metaphor that a child could understand. Avoid technical jargon or explain it immediately in plain words.',
+  exam: '\n[STUDY MODE: Exam Prep] Format the output as a structured, formal academic answer. Highlight clear definitions, key bulleted points, and any critical terms. Conclude with 2 potential review questions.',
+  revision: '\n[STUDY MODE: Revision] Format the output as bulleted revision notes. Use bold terms, headers, key definitions, and quick bullets. Make it highly scannable for rapid studying.',
+  flashcard: '\n[STUDY MODE: Flashcards] Format the output strictly as a set of Front/Back flashcards (at least 3 cards). Format each card as:\nFront: [concept or question]\nBack: [concise definition or explanation]',
+  quiz: '\n[STUDY MODE: Quiz] Format the output strictly as a study quiz. Generate 3-5 multiple-choice or short-answer questions with correct answers listed at the very bottom.'
+};
+
+export const STUDY_MODES = [
+  { id: 'normal', label: '📖 Normal', desc: 'Standard grounded study answers' },
+  { id: 'simple', label: '👶 Simple', desc: 'Explanation using simple analogies' },
+  { id: 'exam', label: '🎓 Exam Prep', desc: 'Academic styling and sample questions' },
+  { id: 'revision', label: '📝 Revision', desc: 'Scannable bullet summary notes' },
+  { id: 'flashcard', label: '🃏 Flashcards', desc: 'Front/Back flashcard study deck' },
+  { id: 'quiz', label: '❓ Quiz', desc: '3-5 test-yourself questions' },
+];
 
 interface ChatInterfaceProps {
   user: any;
@@ -21,6 +44,111 @@ interface ChatInterfaceProps {
   initialSessionId?: string;
   onBackToDashboard: () => void;
   showToast: (message: string, type: 'success' | 'error' | 'warning') => void;
+}
+
+// ─── Notebook Drawer Component ───────────────────────────────────────────────
+
+function NotebookDrawer({
+  savedAnswers,
+  onClose,
+  onRemove,
+}: {
+  savedAnswers: Record<string, { content: string; savedAt: string; query: string; tags?: string[] }>;
+  onClose: () => void;
+  onRemove: (msgId: string) => void;
+}) {
+  const items = Object.entries(savedAnswers).sort(
+    (a, b) => new Date(b[1].savedAt).getTime() - new Date(a[1].savedAt).getTime()
+  );
+  const [selectedIdx, setSelectedIdx] = useState(0);
+
+  // If items shrink or delete occurred
+  useEffect(() => {
+    if (selectedIdx >= items.length && items.length > 0) {
+      setSelectedIdx(items.length - 1);
+    }
+  }, [items.length, selectedIdx]);
+
+  if (items.length === 0) {
+    return (
+      <div className="source-drawer-overlay" onClick={onClose}>
+        <div className="source-drawer" style={{ padding: '24px', textAlign: 'center', maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+          <div className="source-drawer-handle" />
+          <h3 style={{ marginBottom: 12, fontFamily: 'var(--font-display)' }}>Study Notebook</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No bookmarked study answers yet.</p>
+          <button className="btn btn-secondary" onClick={onClose} style={{ marginTop: 16, width: '100%' }}>Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  const [msgId, data] = items[selectedIdx];
+
+  return (
+    <div className="source-drawer-overlay" onClick={onClose}>
+      <div className="source-drawer" onClick={e => e.stopPropagation()} style={{ maxWidth: '720px' }}>
+        <div className="source-drawer-handle" />
+        
+        <div className="source-drawer-header">
+          <div>
+            <div className="source-drawer-subtitle">Notebook Entry {selectedIdx + 1} of {items.length}</div>
+            <div className="source-drawer-filename">🔖 {data.query}</div>
+          </div>
+          <button className="source-drawer-close" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Tags sub-header */}
+        <div style={{ display: 'flex', gap: '8px', padding: '10px 22px', borderBottom: '1px solid var(--border-color)', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Applied Tags:</span>
+          {(data.tags || []).length === 0 ? (
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>None</span>
+          ) : (
+            (data.tags || []).map(t => {
+              const tagColors: Record<string, string> = {
+                'Important': 'tag-important active',
+                'Definitions': 'tag-definitions active',
+                'Needs Revision': 'tag-revision active'
+              };
+              return (
+                <span key={t} className={`study-tag-pill ${tagColors[t] || ''}`} style={{ padding: '2px 8px', fontSize: '0.68rem', pointerEvents: 'none' }}>
+                  {t}
+                </span>
+              );
+            })
+          )}
+        </div>
+
+        <div className="source-content-box" style={{ padding: '20px 22px' }}>
+          <StructuredAnswer raw={data.content} />
+        </div>
+
+        <div className="source-drawer-nav">
+          <button
+            className="source-nav-btn"
+            disabled={selectedIdx === 0}
+            onClick={() => setSelectedIdx(selectedIdx - 1)}
+          >
+            ◀ Prev
+          </button>
+          
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button className="btn btn-danger" style={{ padding: '6px 12px', fontSize: '0.78rem' }} onClick={() => onRemove(msgId)}>
+              🗑️ Delete
+            </button>
+            <span className="source-nav-counter">{selectedIdx + 1} / {items.length}</span>
+          </div>
+
+          <button
+            className="source-nav-btn"
+            disabled={selectedIdx === items.length - 1}
+            onClick={() => setSelectedIdx(selectedIdx + 1)}
+          >
+            Next ▶
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Follow-up suggestion chips types & components ───────────────────────────
@@ -349,6 +477,14 @@ export default function ChatInterface({
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
 
+  // Study Mode, Notebook, and collapsible states
+  const [activeMode, setActiveMode] = useState<StudyMode>('normal');
+  const [notebookOpen, setNotebookOpen] = useState(false);
+  const [savedAnswers, setSavedAnswers] = useState<Record<string, any>>({});
+  const [messageTags, setMessageTags] = useState<Record<string, string[]>>({});
+  const [sidebarNotebookExpanded, setSidebarNotebookExpanded] = useState(false);
+  const [sidebarDoubtsExpanded, setSidebarDoubtsExpanded] = useState(false);
+
   // Source drawer state
   const [drawerSources, setDrawerSources] = useState<RagSource[]>([]);
   const [drawerIndex, setDrawerIndex] = useState(0);
@@ -364,6 +500,15 @@ export default function ChatInterface({
   const lastMsg = messages[messages.length - 1];
   const showStickyActions = lastMsg && lastMsg.sender_role === 'assistant' && !generating;
 
+  // Dynamic Recent Doubts shortcut generator (clean user questions)
+  const recentDoubts = useMemo(() => {
+    return Array.from(new Set(
+      messages
+        .filter(m => m.sender_role === 'user' && !m.content.startsWith('↩') && !m.content.startsWith('👉'))
+        .map(m => m.content)
+    )).slice(-5).reverse();
+  }, [messages]);
+
   const checkScroll = useCallback(() => {
     const el = actionBarRef.current;
     if (!el) return;
@@ -377,6 +522,32 @@ export default function ChatInterface({
     }, 100);
     return () => clearTimeout(timer);
   }, [showStickyActions, checkScroll, messages.length]);
+
+  // Load Saved Notebook and Message Tags
+  const loadSavedAnswers = useCallback(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('study_saved_answers') || '{}');
+      setSavedAnswers(saved);
+      // Synchronize savedIds set
+      setSavedIds(new Set(Object.keys(saved)));
+    } catch {
+      setSavedAnswers({});
+    }
+  }, []);
+
+  const loadMessageTags = useCallback(() => {
+    try {
+      const tags = JSON.parse(localStorage.getItem('study_message_tags') || '{}');
+      setMessageTags(tags);
+    } catch {
+      setMessageTags({});
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSavedAnswers();
+    loadMessageTags();
+  }, [loadSavedAnswers, loadMessageTags]);
 
   const openDrawer = (sources: RagSource[], idx: number) => {
     setDrawerSources(sources);
@@ -491,7 +662,7 @@ export default function ChatInterface({
       // 2. Call the RAG service (placeholder → real LLM hook point)
       await ragAnswer(
         {
-          query,
+          query: query + (STUDY_MODE_PROMPTS[activeMode] || ''),
           documentIds: selectedDocs.map(d => d.id),
           documentNames: selectedDocs.map(d => d.file_name),
           sessionId: currentSession.id,
@@ -695,14 +866,128 @@ export default function ChatInterface({
 
   const handleSaveAnswer = (msgId: string, content: string) => {
     try {
-      const saved: Record<string, { content: string; savedAt: string }> =
+      const msgIdx = messages.findIndex(m => m.id === msgId);
+      let query = 'Saved Answer';
+      if (msgIdx > 0 && messages[msgIdx - 1].sender_role === 'user') {
+        query = messages[msgIdx - 1].content;
+      }
+
+      const saved: Record<string, { content: string; savedAt: string; query: string; tags?: string[] }> =
         JSON.parse(localStorage.getItem('study_saved_answers') || '{}');
-      saved[msgId] = { content, savedAt: new Date().toISOString() };
+      saved[msgId] = {
+        content,
+        savedAt: new Date().toISOString(),
+        query,
+        tags: messageTags[msgId] || []
+      };
       localStorage.setItem('study_saved_answers', JSON.stringify(saved));
       setSavedIds(prev => new Set([...prev, msgId]));
+      loadSavedAnswers();
       showToast('Answer saved to your notebook!', 'success');
     } catch {
       showToast('Could not save answer.', 'error');
+    }
+  };
+
+  const toggleMessageTag = (msgId: string, tag: string) => {
+    const current = messageTags[msgId] || [];
+    const updated = current.includes(tag)
+      ? current.filter(t => t !== tag)
+      : [...current, tag];
+    
+    const nextTags = { ...messageTags, [msgId]: updated };
+    setMessageTags(nextTags);
+    localStorage.setItem('study_message_tags', JSON.stringify(nextTags));
+    
+    // Sync with Saved Notebook
+    const saved = JSON.parse(localStorage.getItem('study_saved_answers') || '{}');
+    if (saved[msgId]) {
+      saved[msgId].tags = updated;
+      localStorage.setItem('study_saved_answers', JSON.stringify(saved));
+      loadSavedAnswers();
+    }
+    showToast(`Updated tags for answer`, 'success');
+  };
+
+  const deleteMessage = async (msgId: string) => {
+    if (isSupabaseConfigured) {
+      await supabase.from('messages').delete().eq('id', msgId);
+    } else {
+      const MOCK_MESSAGES = 'study_assistant_messages';
+      const msgs = JSON.parse(localStorage.getItem(MOCK_MESSAGES) || '[]');
+      const filtered = msgs.filter((m: any) => m.id !== msgId);
+      localStorage.setItem(MOCK_MESSAGES, JSON.stringify(filtered));
+    }
+  };
+
+  const regenerateLastAnswer = async (mode: StudyMode) => {
+    const msgList = [...messages];
+    const lastAssistantIdx = msgList.map(m => m.sender_role).lastIndexOf('assistant');
+    if (lastAssistantIdx === -1) return;
+
+    const lastAssistantMsg = msgList[lastAssistantIdx];
+    
+    let precedingUserMsg = null;
+    for (let i = lastAssistantIdx - 1; i >= 0; i--) {
+      if (msgList[i].sender_role === 'user') {
+        precedingUserMsg = msgList[i];
+        break;
+      }
+    }
+    if (!precedingUserMsg) return;
+
+    const query = precedingUserMsg.content;
+
+    const filteredMessages = messages.filter(m => m.id !== lastAssistantMsg.id);
+    setMessages(filteredMessages);
+
+    try {
+      await deleteMessage(lastAssistantMsg.id);
+    } catch (err) {
+      console.error('Failed to delete old assistant message', err);
+    }
+
+    setGenerating(true);
+    setStreamText('');
+    setStreamSources([]);
+
+    try {
+      await ragAnswer(
+        {
+          query: query + (STUDY_MODE_PROMPTS[mode] || ''),
+          documentIds: selectedDocs.map(d => d.id),
+          documentNames: selectedDocs.map(d => d.file_name),
+          sessionId: currentSession!.id,
+        },
+        {
+          onChunk: (partial) => setStreamText(partial),
+          onComplete: async (fullText, sources) => {
+            try {
+              const assistantMsg = await saveChatMessage(
+                currentSession!.id, 'assistant', fullText,
+                sources
+              );
+              setMessages(prev => [...prev, assistantMsg]);
+            } catch (err) {
+              console.error('Failed to save regenerated assistant message', err);
+            } finally {
+              setStreamText('');
+              setStreamSources([]);
+              setGenerating(false);
+              inputRef.current?.focus();
+            }
+          },
+          onError: (err) => {
+            console.error(err);
+            showToast('Failed to regenerate answer. Please try again.', 'error');
+            setGenerating(false);
+          },
+        }
+      );
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Something went wrong.', 'error');
+      setGenerating(false);
     }
   };
 
@@ -791,6 +1076,95 @@ export default function ChatInterface({
               })}
             </div>
           )}
+
+          {/* Collapsible Study Sections */}
+          <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            
+            {/* Saved Notebook collapsible */}
+            <div>
+              <button
+                onClick={() => setSidebarNotebookExpanded(!sidebarNotebookExpanded)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                  fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                  padding: '6px 8px', borderRadius: '4px'
+                }}
+              >
+                <span>Notebook ({Object.keys(savedAnswers).length})</span>
+                <span style={{ fontSize: '0.6rem' }}>{sidebarNotebookExpanded ? '▼' : '▶'}</span>
+              </button>
+              
+              {sidebarNotebookExpanded && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '6px', paddingLeft: '4px' }}>
+                  {Object.keys(savedAnswers).length === 0 ? (
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '6px 8px', fontStyle: 'italic' }}>
+                      No saved answers.
+                    </div>
+                  ) : (
+                    Object.entries(savedAnswers).map(([id, item]) => (
+                      <div
+                        key={id}
+                        onClick={() => setNotebookOpen(true)}
+                        style={{
+                          fontSize: '0.8rem', padding: '6px 8px', borderRadius: '6px',
+                          cursor: 'pointer', color: 'var(--text-secondary)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                        }}
+                        className="sidebar-notebook-item"
+                        title={item.query}
+                      >
+                        🔖 {item.query}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Recent Doubts collapsible */}
+            <div>
+              <button
+                onClick={() => setSidebarDoubtsExpanded(!sidebarDoubtsExpanded)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                  fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                  padding: '6px 8px', borderRadius: '4px'
+                }}
+              >
+                <span>Recent Doubts</span>
+                <span style={{ fontSize: '0.6rem' }}>{sidebarDoubtsExpanded ? '▼' : '▶'}</span>
+              </button>
+              
+              {sidebarDoubtsExpanded && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '6px', paddingLeft: '4px' }}>
+                  {recentDoubts.length === 0 ? (
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '6px 8px', fontStyle: 'italic' }}>
+                      No recent questions.
+                    </div>
+                  ) : (
+                    recentDoubts.map((doubt, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => { setInput(doubt); inputRef.current?.focus(); }}
+                        style={{
+                          fontSize: '0.8rem', padding: '6px 8px', borderRadius: '6px',
+                          cursor: 'pointer', color: 'var(--text-secondary)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                        }}
+                        className="sidebar-notebook-item"
+                        title={doubt}
+                      >
+                        ❓ {doubt}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+          </div>
         </div>
       </div>
 
@@ -941,6 +1315,30 @@ export default function ChatInterface({
                     }
                   </div>
 
+                  {/* Topic Tags Pills */}
+                  {msg.sender_role === 'assistant' && (
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tags:</span>
+                      {STUDY_TAGS.map(tag => {
+                        const active = (messageTags[msg.id] || []).includes(tag);
+                        const tagColors: Record<string, string> = {
+                          'Important': 'tag-important',
+                          'Definitions': 'tag-definitions',
+                          'Needs Revision': 'tag-revision'
+                        };
+                        return (
+                          <button
+                            key={tag}
+                            className={`study-tag-pill ${tagColors[tag]} ${active ? 'active' : ''}`}
+                            onClick={() => toggleMessageTag(msg.id, tag)}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Action bar — only for completed assistant messages, but hide for the latest message while the sticky bar is shown */}
                   {msg.sender_role === 'assistant' && (idx !== messages.length - 1) && (
                     <ActionBar
@@ -1071,6 +1469,29 @@ export default function ChatInterface({
 
         {/* Input bar */}
         <div className="chat-input-container">
+          {/* Study Mode Selector tabs */}
+          <div className="study-modes-bar">
+            {STUDY_MODES.map(mode => (
+              <button
+                key={mode.id}
+                type="button"
+                className={`study-mode-tab ${activeMode === mode.id ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveMode(mode.id as StudyMode);
+                  showToast(`Switched study mode to: ${mode.label}`, 'success');
+                  // If last message is assistant, automatically regenerate it
+                  const last = messages[messages.length - 1];
+                  if (last && last.sender_role === 'assistant' && !generating) {
+                    regenerateLastAnswer(mode.id as StudyMode);
+                  }
+                }}
+                title={mode.desc}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+
           <form onSubmit={handleSend} className="chat-input-wrapper">
             <input
               ref={inputRef}
@@ -1108,6 +1529,26 @@ export default function ChatInterface({
           index={drawerIndex}
           onClose={closeDrawer}
           onChange={setDrawerIndex}
+        />
+      )}
+
+      {/* ── Notebook drawer overlay ── */}
+      {notebookOpen && (
+        <NotebookDrawer
+          savedAnswers={savedAnswers}
+          onClose={() => setNotebookOpen(false)}
+          onRemove={(id) => {
+            const saved = JSON.parse(localStorage.getItem('study_saved_answers') || '{}');
+            delete saved[id];
+            localStorage.setItem('study_saved_answers', JSON.stringify(saved));
+            setSavedAnswers(saved);
+            setSavedIds(prev => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+            showToast('Deleted from Notebook', 'warning');
+          }}
         />
       )}
     </div>

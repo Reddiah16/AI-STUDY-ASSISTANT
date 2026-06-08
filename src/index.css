@@ -1581,3 +1581,99 @@ button, input, textarea, select {
   opacity: 0.4;
   pointer-events: none;
 }
+
+/* ── Study Modes Control ── */
+.study-modes-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 4px 0 12px;
+  margin-bottom: 4px;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.study-modes-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.study-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+.study-mode-tab:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+.study-mode-tab:active {
+  transform: translateY(0);
+}
+.study-mode-tab.active {
+  background: var(--primary-glow);
+  color: var(--primary-light);
+  border-color: var(--primary);
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+
+/* ── Study Tag Pills ── */
+.study-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 550;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.study-tag-pill:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.study-tag-pill.tag-important.active {
+  background: hsla(350, 89%, 60%, 0.12);
+  border-color: hsla(350, 89%, 60%, 0.45);
+  color: hsl(350, 89%, 68%);
+}
+.study-tag-pill.tag-definitions.active {
+  background: hsla(210, 90%, 60%, 0.12);
+  border-color: hsla(210, 90%, 60%, 0.45);
+  color: hsl(210, 90%, 68%);
+}
+.study-tag-pill.tag-revision.active {
+  background: hsla(45, 93%, 58%, 0.12);
+  border-color: hsla(45, 93%, 58%, 0.45);
+  color: hsl(45, 93%, 68%);
+}
+
+/* ── Sidebar Notebook Items ── */
+.sidebar-notebook-item {
+  transition: all var(--transition-fast);
+}
+.sidebar-notebook-item:hover {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary) !important;
+}
