@@ -5,10 +5,13 @@ import {
   type ChatSession, type ChatMessage, type Document,
 } from '../services/db';
 import { ragAnswer, type RagSource } from '../services/rag';
+import { streamGroundedAnswer, type DocumentChunk } from '../services/ai';
 import {
   MessageSquare, Plus, Trash2, Send, FileText,
   Sparkles, BookOpen, ArrowLeft, Menu, X,
 } from 'lucide-react';
+
+type ActionType = 'summarize' | 'explain' | 'bullets' | 'quiz' | 'flashcards';
 
 interface ChatInterfaceProps {
   user: any;
@@ -198,6 +201,12 @@ export default function ChatInterface({
   const [streamText, setStreamText] = useState('');
   const [streamSources, setStreamSources] = useState<RagSource[]>([]);
 
+  // Action bar state
+  const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
+  const [visibleSourceIds, setVisibleSourceIds] = useState<Set<string>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -352,6 +361,112 @@ export default function ChatInterface({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend(e as any);
+    }
+  };
+
+  // ── Action bar handlers ────────────────────────────────────────────────────
+
+  const ACTION_PROMPTS: Record<ActionType, string> = {
+    summarize:  'Summarize the following study answer into 3-5 concise bullet points with a one-sentence overview at the start.',
+    explain:    'Rewrite the following study answer in very simple terms, as if explaining to a curious 12-year-old. Use analogies and plain language.',
+    bullets:    'Reformat the following study answer strictly as a clean bulleted list of key points. No paragraphs.',
+    quiz:       'Generate 5 short quiz questions with answers, strictly based on the following study answer. Format: Q: ... \nA: ...',
+    flashcards: 'Create 5 flashcard pairs from the following study answer. Format each as:\nFront: [term or concept]\nBack: [definition or explanation]',
+  };
+
+  const ACTION_LABELS: Record<ActionType, string> = {
+    summarize:  'Summarize',
+    explain:    'Explain Simply',
+    bullets:    'Show Bullets',
+    quiz:       'Quiz Me',
+    flashcards: 'Flashcards',
+  };
+
+  const handleActionQuery = async (action: ActionType, msgId: string, msgContent: string) => {
+    if (generating || actionLoadingKey) return;
+    const key = `${msgId}-${action}`;
+    setActionLoadingKey(key);
+    setGenerating(true);
+    setStreamText('');
+    setStreamSources([]);
+
+    try {
+      // Build a synthetic chunk from the existing answer so no retrieval round-trip is needed
+      const syntheticChunk: DocumentChunk = {
+        id: 'action-ctx',
+        documentId: 'action',
+        content: msgContent,
+        similarity: 1.0,
+      };
+
+      const prompt = ACTION_PROMPTS[action];
+      const label  = ACTION_LABELS[action];
+
+      // Persist a user-side marker message
+      if (currentSession) {
+        const userMsg = await saveChatMessage(
+          currentSession.id, 'user', `↩ ${label} the previous answer`
+        );
+        setMessages(prev => [...prev, userMsg]);
+      }
+
+      await streamGroundedAnswer(
+        prompt,
+        [syntheticChunk],
+        ['Previous Answer'],
+        (partial) => setStreamText(partial),
+        async (fullText) => {
+          if (currentSession) {
+            const assistantMsg = await saveChatMessage(
+              currentSession.id, 'assistant', fullText, []
+            );
+            setMessages(prev => [...prev, assistantMsg]);
+          }
+          setStreamText('');
+          setStreamSources([]);
+          setGenerating(false);
+          setActionLoadingKey(null);
+          inputRef.current?.focus();
+        },
+        (err) => {
+          console.error('[ActionBar]', err);
+          showToast(`${label} failed. Please try again.`, 'error');
+          setGenerating(false);
+          setActionLoadingKey(null);
+        },
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Action failed.', 'error');
+      setGenerating(false);
+      setActionLoadingKey(null);
+    }
+  };
+
+  const handleToggleSources = (msgId: string) => {
+    setVisibleSourceIds(prev => {
+      const next = new Set(prev);
+      next.has(msgId) ? next.delete(msgId) : next.add(msgId);
+      return next;
+    });
+  };
+
+  const handleCopy = (msgId: string, content: string) => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopiedId(msgId);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => showToast('Copy failed — clipboard not available.', 'error'));
+  };
+
+  const handleSaveAnswer = (msgId: string, content: string) => {
+    try {
+      const saved: Record<string, { content: string; savedAt: string }> =
+        JSON.parse(localStorage.getItem('study_saved_answers') || '{}');
+      saved[msgId] = { content, savedAt: new Date().toISOString() };
+      localStorage.setItem('study_saved_answers', JSON.stringify(saved));
+      setSavedIds(prev => new Set([...prev, msgId]));
+      showToast('Answer saved to your notebook!', 'success');
+    } catch {
+      showToast('Could not save answer.', 'error');
     }
   };
 
@@ -546,8 +661,24 @@ export default function ChatInterface({
                       : <StructuredAnswer raw={msg.content} />
                     }
                   </div>
-                  {msg.sender_role === 'assistant' && msg.sources?.length > 0 && (
-                    <SourceTags sources={msg.sources} onToast={showToast} />
+
+                  {/* Action bar — only for completed assistant messages */}
+                  {msg.sender_role === 'assistant' && (
+                    <ActionBar
+                      msgId={msg.id}
+                      msgContent={msg.content}
+                      sources={(msg.sources || []) as RagSource[]}
+                      sourcesVisible={visibleSourceIds.has(msg.id)}
+                      loadingKey={actionLoadingKey}
+                      isCopied={copiedId === msg.id}
+                      isSaved={savedIds.has(msg.id)}
+                      disabled={generating}
+                      onAction={(action) => handleActionQuery(action, msg.id, msg.content)}
+                      onToggleSources={() => handleToggleSources(msg.id)}
+                      onCopy={() => handleCopy(msg.id, msg.content)}
+                      onSave={() => handleSaveAnswer(msg.id, msg.content)}
+                      onToast={showToast}
+                    />
                   )}
                 </div>
               ))}
@@ -558,9 +689,6 @@ export default function ChatInterface({
                   <div className="message-content">
                     <StructuredAnswer raw={streamText} />
                   </div>
-                  {streamSources.length > 0 && (
-                    <SourceTags sources={streamSources} onToast={showToast} />
-                  )}
                   <div className="answer-generating">
                     <div className="spinner" style={{ width: 10, height: 10 }} />
                     Generating…
@@ -618,28 +746,118 @@ export default function ChatInterface({
   );
 }
 
-// ─── Source citation tags ─────────────────────────────────────────────────────
+// ─── Action Bar ────────────────────────────────────────────────────────────────
 
-function SourceTags({
-  sources,
-  onToast,
-}: {
+interface ActionBarProps {
+  msgId: string;
+  msgContent: string;
   sources: RagSource[];
+  sourcesVisible: boolean;
+  loadingKey: string | null;
+  isCopied: boolean;
+  isSaved: boolean;
+  disabled: boolean;
+  onAction: (action: ActionType) => void;
+  onToggleSources: () => void;
+  onCopy: () => void;
+  onSave: () => void;
   onToast: (msg: string, type: 'success' | 'error' | 'warning') => void;
-}) {
+}
+
+const PRIMARY_ACTIONS: { id: ActionType; icon: string; label: string }[] = [
+  { id: 'summarize',  icon: '📋', label: 'Summarize'     },
+  { id: 'explain',    icon: '💡', label: 'Explain Simply' },
+  { id: 'bullets',    icon: '•',  label: 'Show Bullets'   },
+  { id: 'quiz',       icon: '❓', label: 'Quiz Me'        },
+  { id: 'flashcards', icon: '🃏', label: 'Flashcards'     },
+];
+
+function ActionBar({
+  msgId, msgContent, sources, sourcesVisible,
+  loadingKey, isCopied, isSaved, disabled,
+  onAction, onToggleSources, onCopy, onSave, onToast,
+}: ActionBarProps) {
   return (
-    <div className="message-sources" style={{ marginTop: 8 }}>
-      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Sources:</span>
-      {sources.map((src, i) => (
-        <div key={i} className="source-tag"
-          title={`${src.fileName}\nRelevance: ${Math.round(src.similarity * 100)}%\n\n"${src.contentSnippet}"`}
-          onClick={() => onToast(
-            `From "${src.fileName}" · ${Math.round(src.similarity * 100)}% match`, 'success'
-          )}>
-          <FileText size={10} />
-          <span>{src.fileName}</span>
+    <div>
+      <div className="action-bar">
+        {/* ── Primary + secondary query actions ── */}
+        <div className="action-bar-primary">
+          {PRIMARY_ACTIONS.map(({ id, icon, label }, i) => {
+            const key = `${msgId}-${id}`;
+            const isLoading = loadingKey === key;
+            const isPrimary = i === 0;
+            return (
+              <button
+                key={id}
+                className={`action-btn${isPrimary ? ' primary' : ''}${isLoading ? ' loading' : ''}`}
+                disabled={disabled || (loadingKey !== null && !isLoading)}
+                onClick={() => onAction(id)}
+                title={label}
+              >
+                <span className="action-btn-icon">{isLoading ? '⏳' : icon}</span>
+                {label}
+              </button>
+            );
+          })}
         </div>
-      ))}
+
+        {/* ── Utility icon buttons ── */}
+        <div className="action-bar-utils">
+          {/* Show Sources */}
+          {sources.length > 0 && (
+            <button
+              className={`action-btn-util${sourcesVisible ? ' active' : ''}`}
+              title={sourcesVisible ? 'Hide sources' : 'Show sources'}
+              onClick={onToggleSources}
+            >
+              📄
+            </button>
+          )}
+
+          {/* Copy */}
+          <button
+            className={`action-btn-util${isCopied ? ' copied' : ''}`}
+            title={isCopied ? 'Copied!' : 'Copy answer'}
+            onClick={onCopy}
+          >
+            {isCopied ? '✓' : '⎘'}
+          </button>
+
+          {/* Save */}
+          <button
+            className={`action-btn-util${isSaved ? ' saved' : ''}`}
+            title={isSaved ? 'Saved!' : 'Save to notebook'}
+            onClick={onSave}
+          >
+            {isSaved ? '🔖' : '📌'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Sources panel (toggleable) ── */}
+      {sourcesVisible && sources.length > 0 && (
+        <div className="sources-panel">
+          <div className="sources-panel-title">Sources</div>
+          <div className="sources-panel-tags">
+            {sources.map((src, i) => (
+              <div
+                key={i}
+                className="source-tag"
+                title={`${src.fileName}\nRelevance: ${Math.round(src.similarity * 100)}%\n\n"${src.contentSnippet}"`}
+                onClick={() => onToast(
+                  `From "${src.fileName}" · ${Math.round(src.similarity * 100)}% match`, 'success'
+                )}
+              >
+                <FileText size={10} />
+                <span>{src.fileName}</span>
+                <span style={{ opacity: 0.6, fontSize: '0.7rem' }}>
+                  {Math.round(src.similarity * 100)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
