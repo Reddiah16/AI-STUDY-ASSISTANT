@@ -1975,3 +1975,75 @@ button, input, textarea, select {
     display: none;
   }
 }
+
+/* ── Topic Tag for Examples ── */
+.study-tag-pill.tag-examples.active {
+  background: hsla(142, 72%, 45%, 0.12);
+  border-color: hsla(142, 72%, 45%, 0.45);
+  color: hsl(142, 72%, 58%);
+}
+
+/* ── Translation row in actions ── */
+.translate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 8px;
+  animation: slideUp 0.18s ease-out;
+  flex-wrap: wrap;
+}
+
+.translate-lang-btn {
+  background: hsla(250, 89%, 65%, 0.08);
+  border: 1px solid hsla(250, 89%, 65%, 0.25);
+  color: var(--primary-light);
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.translate-lang-btn:hover {
+  background: var(--primary);
+  color: var(--text-primary);
+  border-color: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+.translate-lang-btn-cancel {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+  margin-left: auto;
+  transition: color var(--transition-fast);
+}
+
+.translate-lang-btn-cancel:hover {
+  color: var(--error);
+}
+
+/* ── Audio Narrator Pulse ── */
+@keyframes audioPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsla(250, 89%, 65%, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px hsla(250, 89%, 65%, 0);
+  }
+}
+
+.action-btn-util.speaking,
+.sticky-action-btn-util.speaking {
+  animation: audioPulse 1.6s infinite;
+  background: var(--primary-glow) !important;
+  color: var(--primary-light) !important;
+  border-color: var(--primary-light) !important;
+}

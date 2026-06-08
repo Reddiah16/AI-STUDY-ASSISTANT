@@ -14,14 +14,16 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 type ActionType = 'summarize' | 'explain' | 'bullets' | 'quiz' | 'flashcards';
 
-export type StudyMode = 'normal' | 'simple' | 'exam' | 'revision' | 'flashcard' | 'quiz';
+export type StudyMode = 'normal' | 'simple' | 'exam' | 'twoMark' | 'fiveMark' | 'revision' | 'flashcard' | 'quiz';
 
-export const STUDY_TAGS = ['Important', 'Definitions', 'Needs Revision'];
+export const STUDY_TAGS = ['Important', 'Definitions', 'Examples', 'Needs Revision'];
 
 export const STUDY_MODE_PROMPTS: Record<StudyMode, string> = {
   normal: '',
   simple: '\n[STUDY MODE: Simple Explanation] Format the output as a simple explanation using everyday language and an intuitive analogy or a metaphor that a child could understand. Avoid technical jargon or explain it immediately in plain words.',
   exam: '\n[STUDY MODE: Exam Prep] Format the output as a structured, formal academic answer. Highlight clear definitions, key bulleted points, and any critical terms. Conclude with 2 potential review questions.',
+  twoMark: '\n[STUDY MODE: 2-Mark Answer] Format the response as a high-scoring, concise 2-mark exam answer. Provide a direct 1-2 sentence definition and exactly 2 key bulleted points. Keep it extremely brief and focused.',
+  fiveMark: '\n[STUDY MODE: 5-Mark Answer] Format the response as a detailed, comprehensive 5-mark exam answer. Break the content down into a brief introduction card, followed by 3-4 structured explanation cards with bold terms, and a final summary/conclusion card.',
   revision: '\n[STUDY MODE: Revision] Format the output as bulleted revision notes. Use bold terms, headers, key definitions, and quick bullets. Make it highly scannable for rapid studying.',
   flashcard: '\n[STUDY MODE: Flashcards] Format the output strictly as a set of Front/Back flashcards (at least 3 cards). Format each card as:\nFront: [concept or question]\nBack: [concise definition or explanation]',
   quiz: '\n[STUDY MODE: Quiz] Format the output strictly as a study quiz. Generate 3-5 multiple-choice or short-answer questions with correct answers listed at the very bottom.'
@@ -31,6 +33,8 @@ export const STUDY_MODES = [
   { id: 'normal', label: '📖 Normal', desc: 'Standard grounded study answers' },
   { id: 'simple', label: '👶 Simple', desc: 'Explanation using simple analogies' },
   { id: 'exam', label: '🎓 Exam Prep', desc: 'Academic styling and sample questions' },
+  { id: 'twoMark', label: '⏱️ 2-Mark', desc: 'Concise 2-mark exam answer' },
+  { id: 'fiveMark', label: '📝 5-Mark', desc: 'Detailed 5-mark structured answer' },
   { id: 'revision', label: '📝 Revision', desc: 'Scannable bullet summary notes' },
   { id: 'flashcard', label: '🃏 Flashcards', desc: 'Front/Back flashcard study deck' },
   { id: 'quiz', label: '❓ Quiz', desc: '3-5 test-yourself questions' },
@@ -107,6 +111,7 @@ function NotebookDrawer({
               const tagColors: Record<string, string> = {
                 'Important': 'tag-important active',
                 'Definitions': 'tag-definitions active',
+                'Examples': 'tag-examples active',
                 'Needs Revision': 'tag-revision active'
               };
               return (
@@ -367,10 +372,10 @@ function GroundingBadge({ sources }: { sources: RagSource[] }) {
   const level = getGroundingLevel(sources);
   const n = sources.length;
   const configs = {
-    high:   { icon: '🟢', text: `Grounded · ${n} source${n > 1 ? 's' : ''}` },
+    high:   { icon: '🟢', text: `Strongly grounded · ${n} source${n > 1 ? 's' : ''}` },
     medium: { icon: '🟡', text: `Partially grounded · ${n} source${n > 1 ? 's' : ''}` },
-    low:    { icon: '🟠', text: `Weak grounding · ${n} source${n > 1 ? 's' : ''}` },
-    none:   { icon: '⚪', text: 'General knowledge — no documents matched' },
+    low:    { icon: '🟠', text: `No strong source found` },
+    none:   { icon: '⚪', text: 'No strong source found (General knowledge)' },
   };
   const { icon, text } = configs[level];
   return (
@@ -541,6 +546,8 @@ export default function ChatInterface({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
+  const [activeSpeechText, setActiveSpeechText] = useState<string | null>(null);
+  const [activeTranslateId, setActiveTranslateId] = useState<string | null>(null);
 
   // Study Mode, Notebook, and collapsible states
   const [activeMode, setActiveMode] = useState<StudyMode>('normal');
@@ -986,6 +993,87 @@ export default function ChatInterface({
     }
   };
 
+  const handleDownloadSummary = (content: string, previewText: string) => {
+    try {
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const cleanPreview = previewText
+        .replace(/[^\w\s-]/gi, '')
+        .trim()
+        .substring(0, 15)
+        .replace(/\s+/g, '-');
+      const filename = `study-summary-${cleanPreview || 'notes'}-${new Date().toISOString().slice(0, 10)}.md`;
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('Summary downloaded successfully!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to download summary.', 'error');
+    }
+  };
+
+  const handleListenAudio = (content: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      showToast('Speech synthesis not supported in this browser.', 'error');
+      return;
+    }
+
+    if (activeSpeechText === content) {
+      window.speechSynthesis.cancel();
+      setActiveSpeechText(null);
+      showToast('Audio playback stopped', 'warning');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const cleanText = content
+      .replace(/#{1,4}\s+/g, '')
+      .replace(/[-*•●▪◦■☑✓]\s*/g, '')
+      .replace(/[*_`]/g, '')
+      .replace(/\[ERROR\]/g, 'Error:')
+      .trim();
+
+    if (!cleanText) {
+      showToast('No text available to read.', 'warning');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.onend = () => {
+      setActiveSpeechText(null);
+    };
+    utterance.onerror = (e) => {
+      console.error('Speech synthesis error', e);
+      setActiveSpeechText(null);
+    };
+
+    setActiveSpeechText(content);
+    window.speechSynthesis.speak(utterance);
+    showToast('Speaking study assistant guide...', 'success');
+  };
+
+  const handleTranslate = async (content: string, language: string) => {
+    const label = `Translate to ${language}`;
+    const promptText = `Translate the following study answer to ${language}. Retain the structured card formatting (using ### headings), keep it easy to read, keep the technical terminology correct, and keep all markdown formatting intact.\n\nAnswer to translate:\n${content}`;
+    await handleFollowUp(label, promptText, content);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   const regenerateLastAnswer = async (mode: StudyMode) => {
     const msgList = [...messages];
     const lastAssistantIdx = msgList.map(m => m.sender_role).lastIndexOf('assistant');
@@ -1376,6 +1464,7 @@ export default function ChatInterface({
                         const tagColors: Record<string, string> = {
                           'Important': 'tag-important',
                           'Definitions': 'tag-definitions',
+                          'Examples': 'tag-examples',
                           'Needs Revision': 'tag-revision'
                         };
                         return (
@@ -1400,11 +1489,18 @@ export default function ChatInterface({
                       loadingKey={actionLoadingKey}
                       isCopied={copiedId === msg.id}
                       isSaved={savedIds.has(msg.id)}
+                      isSpeaking={activeSpeechText === msg.content}
+                      translateActive={activeTranslateId === msg.id}
                       disabled={generating}
                       onAction={(action) => handleActionQuery(action, msg.id, msg.content)}
                       onToggleSources={() => handleToggleSources(msg.id)}
                       onCopy={() => handleCopy(msg.id, msg.content)}
                       onSave={() => handleSaveAnswer(msg.id, msg.content)}
+                      onDownloadSummary={() => handleDownloadSummary(msg.content, msg.content.substring(0, 25))}
+                      onTranslateClick={() => setActiveTranslateId(activeTranslateId === msg.id ? null : msg.id)}
+                      onSelectLanguage={(lang) => { handleTranslate(msg.content, lang); setActiveTranslateId(null); }}
+                      onCancelTranslate={() => setActiveTranslateId(null)}
+                      onListenAudio={() => handleListenAudio(msg.content)}
                       onOpenSource={(idx) => openDrawer((msg.sources || []) as RagSource[], idx)}
                       onToast={showToast}
                     />
@@ -1474,56 +1570,98 @@ export default function ChatInterface({
 
         {/* Sticky Bottom Action Bar for the active/last assistant answer */}
         {showStickyActions && (
-          <div className="sticky-action-bar-wrap">
-            <div className={`fade-indicator-left ${showLeftFade ? 'visible' : ''}`} />
-            <div ref={actionBarRef} className="sticky-action-bar" onScroll={checkScroll}>
-              {PRIMARY_ACTIONS.map(({ id, icon, label }) => {
-                const key = `${lastMsg.id}-${id}`;
-                const isLoading = actionLoadingKey === key;
-                return (
+          <div className="sticky-action-bar-wrap" style={{ flexDirection: 'column', gap: '8px', alignItems: 'stretch' }}>
+            {activeTranslateId === lastMsg.id && (
+              <div className="translate-row" style={{ margin: '0 0 4px 0' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Translate to:</span>
+                {['Spanish', 'French', 'Hindi', 'German'].map(lang => (
                   <button
-                    key={id}
-                    className={`sticky-action-btn ${isLoading ? 'loading' : ''}`}
-                    disabled={generating || (actionLoadingKey !== null && !isLoading)}
-                    onClick={() => handleActionQuery(id, lastMsg.id, lastMsg.content)}
-                    title={label}
+                    key={lang}
+                    className="translate-lang-btn"
+                    onClick={() => { handleTranslate(lastMsg.content, lang); setActiveTranslateId(null); }}
                   >
-                    <span className="action-btn-icon">{isLoading ? '⏳' : icon}</span>
-                    {label}
+                    {lang}
                   </button>
-                );
-              })}
+                ))}
+                <button className="translate-lang-btn-cancel" onClick={() => setActiveTranslateId(null)}>✕</button>
+              </div>
+            )}
 
-              <div className="sticky-action-divider" />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
+              <div className={`fade-indicator-left ${showLeftFade ? 'visible' : ''}`} />
+              <div ref={actionBarRef} className="sticky-action-bar" onScroll={checkScroll}>
+                {PRIMARY_ACTIONS.map(({ id, icon, label }) => {
+                  const key = `${lastMsg.id}-${id}`;
+                  const isLoading = actionLoadingKey === key;
+                  return (
+                    <button
+                      key={id}
+                      className={`sticky-action-btn ${isLoading ? 'loading' : ''}`}
+                      disabled={generating || (actionLoadingKey !== null && !isLoading)}
+                      onClick={() => handleActionQuery(id, lastMsg.id, lastMsg.content)}
+                      title={label}
+                    >
+                      <span className="action-btn-icon">{isLoading ? '⏳' : icon}</span>
+                      {label}
+                    </button>
+                  );
+                })}
 
-              {/* Utility buttons */}
-              {lastMsg.sources && (lastMsg.sources as RagSource[]).length > 0 && (
+                <div className="sticky-action-divider" />
+
+                {/* Utility buttons */}
+                {lastMsg.sources && (lastMsg.sources as RagSource[]).length > 0 && (
+                  <button
+                    className={`sticky-action-btn-util ${visibleSourceIds.has(lastMsg.id) ? 'active' : ''}`}
+                    onClick={() => handleToggleSources(lastMsg.id)}
+                    title={visibleSourceIds.has(lastMsg.id) ? 'Hide sources' : 'Show sources'}
+                  >
+                    📄 Sources
+                  </button>
+                )}
+
                 <button
-                  className={`sticky-action-btn-util ${visibleSourceIds.has(lastMsg.id) ? 'active' : ''}`}
-                  onClick={() => handleToggleSources(lastMsg.id)}
-                  title={visibleSourceIds.has(lastMsg.id) ? 'Hide sources' : 'Show sources'}
+                  className={`sticky-action-btn-util ${copiedId === lastMsg.id ? 'copied' : ''}`}
+                  onClick={() => handleCopy(lastMsg.id, lastMsg.content)}
+                  title={copiedId === lastMsg.id ? 'Copied!' : 'Copy answer'}
                 >
-                  📄 Sources
+                  {copiedId === lastMsg.id ? '✓' : '⎘'} Copy
                 </button>
-              )}
 
-              <button
-                className={`sticky-action-btn-util ${copiedId === lastMsg.id ? 'copied' : ''}`}
-                onClick={() => handleCopy(lastMsg.id, lastMsg.content)}
-                title={copiedId === lastMsg.id ? 'Copied!' : 'Copy answer'}
-              >
-                {copiedId === lastMsg.id ? '✓' : '⎘'} Copy
-              </button>
+                <button
+                  className={`sticky-action-btn-util ${savedIds.has(lastMsg.id) ? 'saved' : ''}`}
+                  onClick={() => handleSaveAnswer(lastMsg.id, lastMsg.content)}
+                  title={savedIds.has(lastMsg.id) ? 'Saved!' : 'Save to notebook'}
+                >
+                  {savedIds.has(lastMsg.id) ? '🔖' : '📌'} Save
+                </button>
 
-              <button
-                className={`sticky-action-btn-util ${savedIds.has(lastMsg.id) ? 'saved' : ''}`}
-                onClick={() => handleSaveAnswer(lastMsg.id, lastMsg.content)}
-                title={savedIds.has(lastMsg.id) ? 'Saved!' : 'Save to notebook'}
-              >
-                {savedIds.has(lastMsg.id) ? '🔖' : '📌'} Save
-              </button>
+                <button
+                  className={`sticky-action-btn-util ${activeSpeechText === lastMsg.content ? 'active speaking' : ''}`}
+                  onClick={() => handleListenAudio(lastMsg.content)}
+                  title={activeSpeechText === lastMsg.content ? 'Stop audio guide' : 'Listen audio guide'}
+                >
+                  {activeSpeechText === lastMsg.content ? '⏹️ Stop' : '🔊 Listen'}
+                </button>
+
+                <button
+                  className={`sticky-action-btn-util ${activeTranslateId === lastMsg.id ? 'active' : ''}`}
+                  onClick={() => setActiveTranslateId(activeTranslateId === lastMsg.id ? null : lastMsg.id)}
+                  title="Translate answer"
+                >
+                  🌐 Translate
+                </button>
+
+                <button
+                  className="sticky-action-btn-util"
+                  onClick={() => handleDownloadSummary(lastMsg.content, lastMsg.content.substring(0, 25))}
+                  title="Download Summary"
+                >
+                  📥 Download
+                </button>
+              </div>
+              <div className={`fade-indicator-right ${showRightFade ? 'visible' : ''}`} />
             </div>
-            <div className={`fade-indicator-right ${showRightFade ? 'visible' : ''}`} />
           </div>
         )}
 
@@ -1624,11 +1762,18 @@ interface ActionBarProps {
   loadingKey: string | null;
   isCopied: boolean;
   isSaved: boolean;
+  isSpeaking: boolean;
+  translateActive: boolean;
   disabled: boolean;
   onAction: (action: ActionType) => void;
   onToggleSources: () => void;
   onCopy: () => void;
   onSave: () => void;
+  onDownloadSummary: () => void;
+  onTranslateClick: () => void;
+  onSelectLanguage: (lang: string) => void;
+  onCancelTranslate: () => void;
+  onListenAudio: () => void;
   onOpenSource?: (idx: number) => void;
   onToast: (msg: string, type: 'success' | 'error' | 'warning') => void;
 }
@@ -1643,11 +1788,12 @@ const PRIMARY_ACTIONS: { id: ActionType; icon: string; label: string }[] = [
 
 function ActionBar({
   msgId, sources, sourcesVisible,
-  loadingKey, isCopied, isSaved, disabled,
-  onAction, onToggleSources, onCopy, onSave, onOpenSource, onToast,
+  loadingKey, isCopied, isSaved, isSpeaking, translateActive, disabled,
+  onAction, onToggleSources, onCopy, onSave, onDownloadSummary, onTranslateClick,
+  onSelectLanguage, onCancelTranslate, onListenAudio, onOpenSource, onToast,
 }: ActionBarProps) {
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       <div className="action-bar">
         {/* ── Primary + secondary query actions ── */}
         <div className="action-bar-primary">
@@ -1672,6 +1818,33 @@ function ActionBar({
 
         {/* ── Utility icon buttons ── */}
         <div className="action-bar-utils">
+          {/* Listen Audio */}
+          <button
+            className={`action-btn-util${isSpeaking ? ' active speaking' : ''}`}
+            title={isSpeaking ? 'Stop audio guide' : 'Listen audio guide'}
+            onClick={onListenAudio}
+          >
+            {isSpeaking ? '⏹️' : '🔊'}
+          </button>
+
+          {/* Translate */}
+          <button
+            className={`action-btn-util${translateActive ? ' active' : ''}`}
+            title="Translate answer"
+            onClick={onTranslateClick}
+          >
+            🌐
+          </button>
+
+          {/* Download Summary */}
+          <button
+            className="action-btn-util"
+            title="Download study summary (.md)"
+            onClick={onDownloadSummary}
+          >
+            📥
+          </button>
+
           {/* Show Sources */}
           {sources.length > 0 && (
             <button
@@ -1702,6 +1875,22 @@ function ActionBar({
           </button>
         </div>
       </div>
+
+      {translateActive && (
+        <div className="translate-row">
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Translate to:</span>
+          {['Spanish', 'French', 'Hindi', 'German'].map(lang => (
+            <button
+              key={lang}
+              className="translate-lang-btn"
+              onClick={() => onSelectLanguage(lang)}
+            >
+              {lang}
+            </button>
+          ))}
+          <button className="translate-lang-btn-cancel" onClick={onCancelTranslate}>✕</button>
+        </div>
+      )}
 
       {/* ── Sources panel (toggleable) ── */}
       {sourcesVisible && sources.length > 0 && (
