@@ -334,10 +334,11 @@ function renderInline(text: string): React.ReactNode {
  */
 function renderLines(lines: string[]): React.ReactNode {
   return lines.map((line, i) => {
-    const stripped = line.replace(/^[-•●▪◦■☑✓]\s*/, '').trim();
-    if (!stripped) return null;
-    const isBullet = /^[-•●▪◦■☑✓]/.test(line.trim());
+    const trimmedLine = line.trim();
+    const isBullet = /^[-•●▪◦■☑✓]/.test(trimmedLine);
     if (isBullet) {
+      const stripped = trimmedLine.replace(/^[-•●▪◦■☑✓]\s*/, '');
+      if (!stripped) return null;
       return (
         <div key={i} className="answer-bullet">
           <div className="answer-bullet-dot" />
@@ -345,8 +346,9 @@ function renderLines(lines: string[]): React.ReactNode {
         </div>
       );
     }
+    if (!trimmedLine) return null;
     return (
-      <p key={i} className="answer-paragraph">{renderInline(stripped)}</p>
+      <p key={i} className="answer-paragraph">{renderInline(trimmedLine)}</p>
     );
   });
 }
@@ -388,11 +390,32 @@ function StructuredAnswer({
   raw,
   sources = [],
   onOpenSource,
+  onRetry,
 }: {
   raw: string;
   sources?: RagSource[];
   onOpenSource?: (idx: number) => void;
+  onRetry?: () => void;
 }) {
+  if (raw.startsWith('[ERROR]')) {
+    const errorMsg = raw.replace('[ERROR]', '').trim();
+    return (
+      <div className="chat-error-card">
+        <div className="chat-error-header">
+          <span>⚠️</span>
+          <span>Study Assistant Error</span>
+        </div>
+        <div className="chat-error-body">
+          {errorMsg}
+        </div>
+        {onRetry && (
+          <button type="button" className="btn btn-secondary chat-error-retry-btn" onClick={onRetry}>
+            🔄 Retry Generation
+          </button>
+        )}
+      </div>
+    );
+  }
   const sections: AnswerSection[] = [];
   let currentHeading = '';
   let currentLines: string[] = [];
@@ -684,6 +707,23 @@ export default function ChatInterface({
     );
   }, []);
 
+  const handleGenerationError = useCallback(async (err: Error, customToastMsg: string) => {
+    showToast(customToastMsg, 'error');
+    if (currentSession) {
+      try {
+        const errMsg = await saveChatMessage(
+          currentSession.id,
+          'assistant',
+          `[ERROR] ${err.message || 'Generation failed. Please try again.'}`
+        );
+        setMessages(prev => [...prev, errMsg]);
+      } catch (saveErr) {
+        console.error('Failed to save error message', saveErr);
+      }
+    }
+    setGenerating(false);
+  }, [currentSession, showToast]);
+
   // ── Send message ───────────────────────────────────────────────────────────
 
   const handleSend = async (e: React.FormEvent) => {
@@ -726,11 +766,7 @@ export default function ChatInterface({
               inputRef.current?.focus();
             }
           },
-          onError: (err) => {
-            console.error(err);
-            showToast('Failed to generate answer. Please try again.', 'error');
-            setGenerating(false);
-          },
+          onError: (err) => handleGenerationError(err, 'Failed to generate answer. Please try again.'),
         }
       );
     } catch (err: any) {
@@ -812,9 +848,7 @@ export default function ChatInterface({
           inputRef.current?.focus();
         },
         (err) => {
-          console.error('[ActionBar]', err);
-          showToast(`${label} failed. Please try again.`, 'error');
-          setGenerating(false);
+          handleGenerationError(err, `${label} failed. Please try again.`);
           setActionLoadingKey(null);
         },
       );
@@ -866,11 +900,7 @@ export default function ChatInterface({
           setGenerating(false);
           inputRef.current?.focus();
         },
-        (err) => {
-          console.error('[FollowUp]', err);
-          showToast(`Failed to generate answer. Please try again.`, 'error');
-          setGenerating(false);
-        }
+        (err) => handleGenerationError(err, 'Failed to generate answer. Please try again.'),
       );
     } catch (err: any) {
       showToast(err.message || 'Follow-up failed.', 'error');
@@ -1011,11 +1041,7 @@ export default function ChatInterface({
               inputRef.current?.focus();
             }
           },
-          onError: (err) => {
-            console.error(err);
-            showToast('Failed to regenerate answer. Please try again.', 'error');
-            setGenerating(false);
-          },
+          onError: (err) => handleGenerationError(err, 'Failed to regenerate answer. Please try again.'),
         }
       );
     } catch (err: any) {
@@ -1336,6 +1362,7 @@ export default function ChatInterface({
                           raw={msg.content}
                           sources={(msg.sources || []) as RagSource[]}
                           onOpenSource={(idx) => openDrawer((msg.sources || []) as RagSource[], idx)}
+                          onRetry={() => regenerateLastAnswer(activeMode)}
                         />
                     }
                   </div>

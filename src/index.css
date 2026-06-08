@@ -1904,3 +1904,74 @@ button, input, textarea, select {
 .empty-state-suggestion:active {
   transform: translateY(0) scale(0.97);
 }
+
+/* ── Chat Error Card Bubble ── */
+.chat-error-card {
+  background: hsla(350, 89%, 60%, 0.05);
+  border: 1px solid hsla(350, 89%, 60%, 0.25);
+  border-left: 4px solid var(--error);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideUp 0.22s ease-out;
+  margin: 10px 0;
+  max-width: 600px;
+}
+
+.chat-error-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--error);
+}
+
+.chat-error-body {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.chat-error-retry-btn {
+  align-self: flex-start;
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 20px;
+  border: 1px solid hsla(350, 89%, 60%, 0.3);
+  background: hsla(350, 89%, 60%, 0.08);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.chat-error-retry-btn:hover {
+  background: hsla(350, 89%, 60%, 0.18);
+  color: var(--text-primary);
+  border-color: var(--error);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+.chat-error-retry-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ── Mobile Inline Action Bar Scroll Overflow ── */
+@media (max-width: 768px) {
+  .action-bar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    width: 100%;
+  }
+  .action-bar::-webkit-scrollbar {
+    display: none;
+  }
+}

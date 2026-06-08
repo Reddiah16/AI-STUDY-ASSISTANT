@@ -447,6 +447,13 @@ export function buildGroundedPrompt(
   const systemPrompt = `You are an expert AI Study Assistant. Use the provided study material chunks to answer the user's question accurately and helpfully.
 Structure your response clearly using markdown headings, lists, and bold text to make it easy to study.
 
+Break down the response into logical study sections using the following exact heading styles to enable card-based rendering:
+- ### Summary (compulsory first section)
+- ### Key Concepts (or ### Key Points)
+- ### Explanation
+- ### Revision Tips (or ### Study Tips)
+- ### Conclusion (optional summary connection)
+
 CRITICAL: You must answer the question using ONLY the provided study material chunks as context. Do not use external general knowledge except when strictly needed for definitions/clarity. If the provided chunks do not contain relevant information to answer the question, state clearly: "I cannot find the answer to this question in the selected study documents."`;
 
   const userPrompt = contextChunks.length === 0
@@ -456,7 +463,7 @@ ${contextChunks.map((c, i) => `[Source ${i + 1}]: ${c.content}`).join('\n\n')}
 
 User Question: "${query}"
 
-Provide a detailed grounded answer based strictly on the study materials above.`;
+Provide a detailed grounded answer based strictly on the study materials above. Ensure you use the requested markdown headings.`;
 
   return { systemPrompt, userPrompt };
 }
