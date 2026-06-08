@@ -23,6 +23,82 @@ interface ChatInterfaceProps {
   showToast: (message: string, type: 'success' | 'error' | 'warning') => void;
 }
 
+// ─── Follow-up suggestion chips types & components ───────────────────────────
+
+interface SuggestionChip {
+  id: string;
+  label: string;
+  prompt: string;
+}
+
+function getSuggestionsForAnswer(content: string): SuggestionChip[] {
+  const lower = content.toLowerCase();
+  const chips: SuggestionChip[] = [];
+
+  const hasCode = content.includes('```') || lower.includes('const ') || lower.includes('function ') || lower.includes('import ');
+  const isQuiz = lower.includes('q:') || lower.includes('front:') || lower.includes('question:');
+  const isShort = content.length < 400;
+
+  if (hasCode) {
+    chips.push({ id: 'explain_code', label: '💻 Explain Code', prompt: 'Walk through the code block in the previous answer step-by-step and explain how it works.' });
+    chips.push({ id: 'example', label: '💡 Give Example', prompt: 'Provide another code example or concrete application of this concept.' });
+  } else {
+    chips.push({ id: 'example', label: '💡 Give Example', prompt: 'Provide a concrete, real-world example explaining the key concepts in the previous answer.' });
+  }
+
+  if (isQuiz) {
+    chips.push({ id: 'explain_answers', label: '🧠 Explain Answers', prompt: 'Go through the questions in the previous answer and explain the reasoning behind each correct answer.' });
+    chips.push({ id: 'notes', label: '📝 Create Revision Notes', prompt: 'Generate structured, easy-to-read revision notes based on these questions.' });
+  } else {
+    if (!isShort) {
+      chips.push({ id: 'shorter', label: '⚡ Make Shorter', prompt: 'Summarize the previous answer to make it significantly shorter and more concise while keeping the main points.' });
+    }
+    chips.push({ id: 'simple', label: '👶 Explain Simply', prompt: 'Explain the previous answer in extremely simple words with an analogy, suitable for a beginner.' });
+  }
+
+  if (!isQuiz) {
+    chips.push({ id: 'questions', label: '❓ Important Questions', prompt: 'List 3-5 key exam or study questions based on the concepts discussed in the previous answer.' });
+    chips.push({ id: 'test', label: '🎯 Test Me', prompt: 'Ask me 3 multiple-choice or short questions to test my understanding of the previous answer. Wait for my response before giving answers.' });
+  }
+
+  return chips.slice(0, 4);
+}
+
+interface SuggestionChipsProps {
+  msgContent: string;
+  onSelect: (chip: SuggestionChip) => void;
+  loadingId: string | null;
+  disabled: boolean;
+}
+
+function SuggestionChips({
+  msgContent,
+  onSelect,
+  loadingId,
+  disabled,
+}: SuggestionChipsProps) {
+  const chips = getSuggestionsForAnswer(msgContent);
+
+  return (
+    <div className="suggestion-chips-container">
+      {chips.map(chip => {
+        const isLoading = loadingId === chip.id;
+        return (
+          <button
+            key={chip.id}
+            className={`suggestion-chip ${isLoading ? 'loading' : ''}`}
+            onClick={() => onSelect(chip)}
+            disabled={disabled}
+          >
+            {isLoading ? <span className="chip-spinner" /> : null}
+            <span>{chip.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Structured answer renderer ───────────────────────────────────────────────
 
 interface AnswerSection {
@@ -271,6 +347,7 @@ export default function ChatInterface({
   const [visibleSourceIds, setVisibleSourceIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
 
   // Source drawer state
   const [drawerSources, setDrawerSources] = useState<RagSource[]>([]);
@@ -537,6 +614,68 @@ export default function ChatInterface({
       setGenerating(false);
       setActionLoadingKey(null);
     }
+  };
+
+  const handleFollowUp = async (label: string, promptText: string, parentMsgId: string, parentContent: string) => {
+    if (generating) return;
+    setGenerating(true);
+    setStreamText('');
+    setStreamSources([]);
+
+    try {
+      const syntheticChunk: DocumentChunk = {
+        id: 'action-ctx',
+        documentId: 'action',
+        content: parentContent,
+        similarity: 1.0,
+      };
+
+      if (currentSession) {
+        const userMsg = await saveChatMessage(
+          currentSession.id,
+          'user',
+          `👉 ${label}`
+        );
+        setMessages(prev => [...prev, userMsg]);
+      }
+
+      await streamGroundedAnswer(
+        promptText,
+        [syntheticChunk],
+        ['Previous Answer Context'],
+        (partial) => setStreamText(partial),
+        async (fullText) => {
+          if (currentSession) {
+            const assistantMsg = await saveChatMessage(
+              currentSession.id,
+              'assistant',
+              fullText,
+              []
+            );
+            setMessages(prev => [...prev, assistantMsg]);
+          }
+          setStreamText('');
+          setStreamSources([]);
+          setGenerating(false);
+          inputRef.current?.focus();
+        },
+        (err) => {
+          console.error('[FollowUp]', err);
+          showToast(`Failed to generate answer. Please try again.`, 'error');
+          setGenerating(false);
+        }
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Follow-up failed.', 'error');
+      setGenerating(false);
+    }
+  };
+
+  const handleSuggestionClick = async (chip: SuggestionChip, msgId: string, msgContent: string) => {
+    if (generating || selectedSuggestionId) return;
+    setSelectedSuggestionId(chip.id);
+    await handleFollowUp(chip.label, chip.prompt, msgId, msgContent);
+    setSelectedSuggestionId(null);
   };
 
   const handleToggleSources = (msgId: string) => {
@@ -819,6 +958,16 @@ export default function ChatInterface({
                       onSave={() => handleSaveAnswer(msg.id, msg.content)}
                       onOpenSource={(idx) => openDrawer((msg.sources || []) as RagSource[], idx)}
                       onToast={showToast}
+                    />
+                  )}
+
+                  {/* Suggestion Chips — only for the latest completed assistant message */}
+                  {msg.sender_role === 'assistant' && (idx === messages.length - 1) && !generating && (
+                    <SuggestionChips
+                      msgContent={msg.content}
+                      onSelect={(chip) => handleSuggestionClick(chip, msg.id, msg.content)}
+                      loadingId={selectedSuggestionId}
+                      disabled={generating || selectedSuggestionId !== null}
                     />
                   )}
                 </div>
