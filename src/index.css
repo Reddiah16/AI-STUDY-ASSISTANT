@@ -501,7 +501,7 @@ button, input, textarea, select {
 .message-bubble.assistant {
   align-self: center;
   width: 100%;
-  max-width: 740px;
+  max-width: 780px;
 }
 
 @media (max-width: 768px) {
@@ -545,37 +545,37 @@ button, input, textarea, select {
 .answer-body {
   display: flex;
   flex-direction: column;
-  gap: 24px; /* Relaxed vertical spacing rhythm */
+  gap: 32px; /* Generous visual separation between sections */
   width: 100%;
-  max-width: 740px;
+  max-width: 780px; /* Slightly wider reading column to accommodate larger text */
   margin: 0 auto;
 }
 
 .answer-plain {
   background: hsl(223, 28%, 9%); /* Solid refined matte dark surface */
   border: 1px solid hsla(217, 20%, 30%, 0.18);
-  border-radius: 14px; /* Consistent rounded corners */
-  padding: 24px 28px;
-  font-size: 0.95rem;
-  line-height: 1.75;
+  border-radius: 16px; /* High-end rounded corners */
+  padding: 26px 32px; /* Generous interior padding */
+  font-size: 1.1rem; /* Large, readable body text */
+  line-height: 1.9; /* Spacious line height for effortless scanning */
   color: hsl(215, 20%, 82%); /* Premium off-white readability */
   border-bottom-left-radius: 2px;
-  max-width: 740px;
+  max-width: 780px;
   margin: 0 auto;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 1px hsla(0, 0%, 100%, 0.02); /* Beveled light inset edge */
+  box-shadow: 0 12px 36px -12px rgba(0, 0, 0, 0.55), inset 0 1px 1px hsla(0, 0%, 100%, 0.02);
 }
 
 .section-card {
   background: hsl(223, 28%, 9%);
   border: 1px solid hsla(217, 20%, 30%, 0.16);
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 1px hsla(0, 0%, 100%, 0.02);
+  box-shadow: 0 12px 36px -12px rgba(0, 0, 0, 0.55), inset 0 1px 1px hsla(0, 0%, 100%, 0.02);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 .section-card:hover {
   border-color: hsla(250, 95%, 72%, 0.15);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.65), 0 0 15px var(--primary-glow), inset 0 1px 1px hsla(0, 0%, 100%, 0.02);
+  box-shadow: 0 24px 48px -18px rgba(0, 0, 0, 0.7), 0 0 15px var(--primary-glow), inset 0 1px 1px hsla(0, 0%, 100%, 0.02);
   transform: translateY(-1.5px);
 }
 
@@ -591,20 +591,20 @@ button, input, textarea, select {
 .section-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 18px 24px 14px; /* Sophisticated padding scale */
-  background: transparent; /* Clean transparent header background */
-  border-bottom: 1px solid hsla(217, 20%, 30%, 0.1); /* Soft bottom divider line */
+  gap: 14px;
+  padding: 22px 32px 18px; /* Enhanced vertical/horizontal padding */
+  background: transparent;
+  border-bottom: 1px solid hsla(217, 20%, 30%, 0.12); /* Soft visible divider */
 }
 
 .section-icon-wrap {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid hsla(255, 255, 255, 0.03);
@@ -613,20 +613,20 @@ button, input, textarea, select {
 .section-title {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 1.02rem; /* Clean typography scale */
-  letter-spacing: -0.015em;
+  font-size: 1.25rem; /* Visibly larger section headings */
+  letter-spacing: -0.02em;
   text-transform: none;
   color: var(--text-primary);
 }
 
 .section-body {
-  padding: 18px 24px 22px; /* ElegantSpacing Rhythm */
-  font-size: 0.95rem;
-  line-height: 1.75;
+  padding: 22px 32px 28px; /* Increased internal padding rhythm */
+  font-size: 1.1rem; /* Large scanable body font */
+  line-height: 1.9; /* Generous spacing between lines */
   color: hsl(215, 20%, 82%);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px; /* More space between paragraphs */
 }
 .section-body p, .section-body li, .section-body .answer-bullet-text {
   color: hsl(215, 20%, 82%);
@@ -634,26 +634,26 @@ button, input, textarea, select {
 
 .answer-bullet {
   display: flex;
-  gap: 12px;
+  gap: 14px; /* More spacing between dot and bullet text */
   align-items: flex-start;
-  padding: 3px 0;
+  padding: 6px 0;
 }
 .answer-bullet-dot {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--primary-light);
-  margin-top: 9px;
+  margin-top: 11px; /* Center aligned with larger body text */
   flex-shrink: 0;
 }
 .answer-bullet-text {
   flex: 1;
-  line-height: 1.65;
+  line-height: 1.8;
 }
 
 .answer-paragraph {
   margin: 0;
-  line-height: 1.75;
+  line-height: 1.9;
   color: hsl(215, 20%, 82%);
 }
 
@@ -2115,40 +2115,40 @@ button, input, textarea, select {
 
   /* Slightly more compact card headers to preserve vertical space */
   .section-header {
-    padding: 12px 16px !important;
-    gap: 10px !important;
+    padding: 16px 20px !important;
+    gap: 12px !important;
   }
 
   .section-title {
-    font-size: 0.95rem !important; /* Clean and readable title */
+    font-size: 1.15rem !important; /* Visibly larger headings on mobile */
   }
 
   /* Relaxed internal card body */
   .section-body {
-    padding: 16px 16px 18px !important;
-    gap: 10px !important;
+    padding: 20px 20px 22px !important;
+    gap: 12px !important;
   }
 
   /* Optimize typography for small screen reading comfort */
   .answer-paragraph {
-    font-size: 0.92rem !important;
-    line-height: 1.68 !important;
+    font-size: 1.04rem !important; /* Enlarge mobile text sizes */
+    line-height: 1.8 !important; /* Better spacing between lines */
     color: hsl(215, 15%, 85%) !important;
   }
 
   .answer-bullet-text {
-    font-size: 0.92rem !important;
-    line-height: 1.65 !important;
+    font-size: 1.04rem !important; /* Enlarge mobile bullet sizes */
+    line-height: 1.75 !important;
     color: hsl(215, 15%, 85%) !important;
   }
 
   .answer-bullet {
-    gap: 10px !important;
-    padding: 3px 0 !important;
+    gap: 12px !important;
+    padding: 4px 0 !important;
   }
 
   .answer-bullet-dot {
-    margin-top: 8px !important;
+    margin-top: 10px !important;
   }
 
   /* Make topic tags and suggestions compact and clean */
