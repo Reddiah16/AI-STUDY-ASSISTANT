@@ -2085,3 +2085,91 @@ button, input, textarea, select {
   color: var(--primary-light) !important;
   border-color: var(--primary-light) !important;
 }
+
+/* ── Mobile-Only Answer Experience Optimizations ── */
+@media (max-width: 768px) {
+  /* Increase vertical spacing between prompt/answer loops */
+  .chat-messages-container {
+    padding: 16px 12px;
+    gap: 32px !important;
+  }
+
+  /* Increase vertical spacing between structured cards */
+  .answer-body {
+    gap: 22px !important;
+  }
+
+  /* Clean, flat card design to reduce visual noise */
+  .section-card {
+    border-radius: 12px !important;
+    border: 1px solid hsla(217, 20%, 30%, 0.18) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .section-card:hover {
+    transform: none !important; /* Disable hover elevation translate on mobile touch */
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  /* Slightly more compact card headers to preserve vertical space */
+  .section-header {
+    padding: 12px 16px !important;
+    gap: 10px !important;
+  }
+
+  .section-title {
+    font-size: 0.95rem !important; /* Clean and readable title */
+  }
+
+  /* Relaxed internal card body */
+  .section-body {
+    padding: 16px 16px 18px !important;
+    gap: 10px !important;
+  }
+
+  /* Optimize typography for small screen reading comfort */
+  .answer-paragraph {
+    font-size: 0.92rem !important;
+    line-height: 1.68 !important;
+    color: hsl(215, 15%, 85%) !important;
+  }
+
+  .answer-bullet-text {
+    font-size: 0.92rem !important;
+    line-height: 1.65 !important;
+    color: hsl(215, 15%, 85%) !important;
+  }
+
+  .answer-bullet {
+    gap: 10px !important;
+    padding: 3px 0 !important;
+  }
+
+  .answer-bullet-dot {
+    margin-top: 8px !important;
+  }
+
+  /* Make topic tags and suggestions compact and clean */
+  .study-tag-pill {
+    font-size: 0.68rem !important;
+    padding: 3px 8px !important;
+  }
+
+  .suggestion-chips-container {
+    margin-top: 12px !important;
+    padding-top: 10px !important;
+    gap: 6px !important;
+  }
+
+  .suggestion-chip {
+    font-size: 0.75rem !important;
+    padding: 5px 12px !important;
+    border-radius: 14px !important;
+  }
+
+  /* Clean background contrast for drawer header */
+  .source-drawer {
+    border-top-left-radius: 20px !important;
+    border-top-right-radius: 20px !important;
+  }
+}
