@@ -28,9 +28,9 @@
   --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   
-  --shadow-sm: 0 2px 8px -2px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.7);
-  --shadow-lg: 0 16px 48px -8px rgba(0, 0, 0, 0.9);
+  --shadow-sm: 0 2px 8px -2px hsla(250, 30%, 5%, 0.4);
+  --shadow-md: 0 8px 24px -4px hsla(250, 40%, 4%, 0.65);
+  --shadow-lg: 0 16px 48px -8px hsla(250, 50%, 3%, 0.85);
   
   --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -47,7 +47,9 @@
 
 body {
   font-family: var(--font-body);
-  background-color: var(--bg-base);
+  background: radial-gradient(circle at 80% 20%, hsla(280, 85%, 60%, 0.03), transparent 60%),
+              radial-gradient(circle at 15% 80%, hsla(250, 89%, 65%, 0.03), transparent 60%),
+              var(--bg-base);
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
@@ -445,7 +447,8 @@ button, input, textarea, select {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--bg-base);
+  background: radial-gradient(circle at 50% 0%, hsla(250, 89%, 65%, 0.04), transparent 70%),
+              var(--bg-base);
   height: 100%;
   min-width: 0; /* Prevents flex items from overflowing horizontally */
 }
@@ -562,10 +565,13 @@ button, input, textarea, select {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   overflow: hidden;
-  transition: border-color var(--transition-fast);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.25);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 .section-card:hover {
-  border-color: hsla(250, 89%, 65%, 0.3);
+  border-color: hsla(250, 89%, 72%, 0.25);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4), 0 0 12px var(--primary-glow);
+  transform: translateY(-1px);
 }
 
 .section-card.accent-blue  { border-left: 3px solid hsl(210, 90%, 60%); }
@@ -611,10 +617,13 @@ button, input, textarea, select {
   padding: 14px 18px;
   font-size: 0.93rem;
   line-height: 1.75;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.section-body p, .section-body li, .section-body .answer-bullet-text {
+  color: var(--text-secondary);
 }
 
 .answer-bullet {
@@ -1676,4 +1685,222 @@ button, input, textarea, select {
 .sidebar-notebook-item:hover {
   background: var(--bg-surface-elevated);
   color: var(--text-primary) !important;
+}
+
+/* ── Collapsible Slide Down Animations ── */
+.doc-drawer-content {
+  animation: slideDown var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 800px;
+  }
+}
+
+/* ── Answer Skeleton Loader ── */
+.skeleton-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.skeleton-card-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  border-left: 3px solid var(--border-color);
+}
+
+.skeleton-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.skeleton-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--border-color);
+}
+
+.skeleton-title {
+  width: 120px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--border-color);
+}
+
+.skeleton-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: var(--border-color);
+}
+.skeleton-line.l-75 { width: 75%; }
+.skeleton-line.l-90 { width: 90%; }
+.skeleton-line.l-50 { width: 50%; }
+
+/* Pulse animation */
+@keyframes skeletonPulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.animate-pulse {
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+/* ── Chat Empty State Aesthetic ── */
+.chat-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  max-width: 600px;
+  margin: 0 auto;
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.chat-empty-state-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-light);
+  box-shadow: 0 0 20px var(--primary-glow);
+  margin-bottom: 4px;
+}
+
+/* ── Grounding Warning Alert ── */
+.grounding-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  background: hsla(45, 93%, 58%, 0.05);
+  border: 1px solid hsla(45, 93%, 58%, 0.2);
+  border-left: 3px solid var(--warning);
+  color: hsl(45, 93%, 65%);
+  animation: slideUp 0.22s ease-out;
+}
+
+/* ── Collapsible Slide Down Animations using CSS Grid ── */
+.collapsible-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-normal) ease;
+  overflow: hidden;
+  opacity: 0;
+}
+.collapsible-wrapper.expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.collapsible-content {
+  min-height: 0;
+}
+
+/* ── Dashboard Empty State Aesthetic ── */
+.dashboard-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 20px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  background: rgba(14, 18, 28, 0.15);
+  animation: fadeIn var(--transition-normal) ease-out;
+  margin: 10px 0;
+}
+
+.dashboard-empty-state-icon {
+  margin-bottom: 12px;
+  color: var(--primary-light);
+  background: var(--primary-glow);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.dashboard-empty-state-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.dashboard-empty-state-desc {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  max-width: 280px;
+}
+
+/* ── Empty State Suggestion Chips ── */
+.empty-state-suggestion {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.empty-state-suggestion:hover {
+  background: var(--primary-glow);
+  border-color: var(--primary-light);
+  color: var(--primary-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+.empty-state-suggestion:active {
+  transform: translateY(0) scale(0.97);
 }

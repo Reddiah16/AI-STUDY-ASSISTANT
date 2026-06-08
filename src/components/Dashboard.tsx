@@ -19,6 +19,42 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
+function DocumentSkeletonLoader() {
+  return (
+    <div className="skeleton-container animate-pulse" style={{ gap: '10px' }}>
+      {[1, 2, 3].map(i => (
+        <div key={i} className="document-item" style={{ borderStyle: 'dashed', opacity: 1 - (i - 1) * 0.25 }}>
+          <div className="document-meta" style={{ width: '100%' }}>
+            <div className="skeleton-icon" style={{ width: 18, height: 18, borderRadius: '4px' }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="skeleton-line" style={{ width: '40%', height: 12 }} />
+              <div className="skeleton-line" style={{ width: '20%', height: 8 }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SessionSkeletonLoader() {
+  return (
+    <div className="skeleton-container animate-pulse" style={{ gap: '6px' }}>
+      {[1, 2, 3].map(i => (
+        <div key={i} className="document-item" style={{ borderStyle: 'dashed', opacity: 1 - (i - 1) * 0.25, padding: '10px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+            <div className="skeleton-icon" style={{ width: 15, height: 15, borderRadius: '4px' }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <div className="skeleton-line" style={{ width: '60%', height: 11 }} />
+              <div className="skeleton-line" style={{ width: '25%', height: 7 }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Dashboard({ user, onStartChat, showToast, onLogout }: DashboardProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -297,14 +333,14 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
           </div>
 
           {loadingDocs ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '32px' }}>
-              <div className="spinner" />
-            </div>
+            <DocumentSkeletonLoader />
           ) : documents.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--text-muted)' }}>
-              <FileText size={40} strokeWidth={1.2} style={{ marginBottom: '10px', opacity: 0.5 }} />
-              <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No documents yet</p>
-              <p style={{ fontSize: '0.82rem', marginTop: '4px' }}>Upload a PDF or text file to get started.</p>
+            <div className="dashboard-empty-state">
+              <div className="dashboard-empty-state-icon">
+                <FileText size={24} />
+              </div>
+              <div className="dashboard-empty-state-title">No documents yet</div>
+              <div className="dashboard-empty-state-desc">Upload a PDF or text file to get started.</div>
             </div>
           ) : (
             <div className="document-list" style={{ maxHeight: '380px', overflowY: 'auto' }}>
@@ -398,14 +434,14 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
           </div>
 
           {loadingSessions ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '24px' }}>
-              <div className="spinner" style={{ width: 18, height: 18 }} />
-            </div>
+            <SessionSkeletonLoader />
           ) : sessions.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-              <MessageSquare size={36} strokeWidth={1.2} style={{ marginBottom: '10px', opacity: 0.45 }} />
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>No sessions yet</p>
-              <p style={{ fontSize: '0.78rem', marginTop: '4px' }}>Start your first AI chat session above.</p>
+            <div className="dashboard-empty-state">
+              <div className="dashboard-empty-state-icon">
+                <MessageSquare size={24} />
+              </div>
+              <div className="dashboard-empty-state-title">No sessions yet</div>
+              <div className="dashboard-empty-state-desc">Start your first AI chat session above.</div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '340px', overflowY: 'auto' }}>

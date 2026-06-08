@@ -151,6 +151,49 @@ function NotebookDrawer({
   );
 }
 
+// ─── Answer Skeleton Loader ──────────────────────────────────────────────────
+
+function AnswerSkeletonLoader() {
+  return (
+    <div className="skeleton-container animate-pulse">
+      <div className="skeleton-card-item">
+        <div className="skeleton-hdr">
+          <div className="skeleton-icon" />
+          <div className="skeleton-title" />
+        </div>
+        <div className="skeleton-body">
+          <div className="skeleton-line l-90" />
+          <div className="skeleton-line l-75" />
+          <div className="skeleton-line l-50" />
+        </div>
+      </div>
+      <div className="skeleton-card-item" style={{ opacity: 0.65 }}>
+        <div className="skeleton-hdr">
+          <div className="skeleton-icon" />
+          <div className="skeleton-title" />
+        </div>
+        <div className="skeleton-body">
+          <div className="skeleton-line l-90" />
+          <div className="skeleton-line l-75" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompactSessionSkeleton() {
+  return (
+    <div className="skeleton-container animate-pulse" style={{ gap: '8px', padding: '0 8px' }}>
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 0', opacity: 1 - (i - 1) * 0.18 }}>
+          <div className="skeleton-icon" style={{ width: 14, height: 14, borderRadius: '3px' }} />
+          <div className="skeleton-line" style={{ flex: 1, height: 10, borderRadius: '3px' }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Follow-up suggestion chips types & components ───────────────────────────
 
 interface SuggestionChip {
@@ -468,7 +511,6 @@ export default function ChatInterface({
 
   // Streaming state — ephemeral, never persisted
   const [streamText, setStreamText] = useState('');
-  const [streamSources, setStreamSources] = useState<RagSource[]>([]);
 
   // Action bar state
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
@@ -652,7 +694,6 @@ export default function ChatInterface({
     setInput('');
     setGenerating(true);
     setStreamText('');
-    setStreamSources([]);
 
     try {
       // 1. Persist user message
@@ -681,7 +722,6 @@ export default function ChatInterface({
               console.error('Failed to save assistant message', err);
             } finally {
               setStreamText('');
-              setStreamSources([]);
               setGenerating(false);
               inputRef.current?.focus();
             }
@@ -733,7 +773,6 @@ export default function ChatInterface({
     setActionLoadingKey(key);
     setGenerating(true);
     setStreamText('');
-    setStreamSources([]);
 
     try {
       // Build a synthetic chunk from the existing answer so no retrieval round-trip is needed
@@ -768,7 +807,6 @@ export default function ChatInterface({
             setMessages(prev => [...prev, assistantMsg]);
           }
           setStreamText('');
-          setStreamSources([]);
           setGenerating(false);
           setActionLoadingKey(null);
           inputRef.current?.focus();
@@ -787,11 +825,10 @@ export default function ChatInterface({
     }
   };
 
-  const handleFollowUp = async (label: string, promptText: string, parentMsgId: string, parentContent: string) => {
+  const handleFollowUp = async (label: string, promptText: string, parentContent: string) => {
     if (generating) return;
     setGenerating(true);
     setStreamText('');
-    setStreamSources([]);
 
     try {
       const syntheticChunk: DocumentChunk = {
@@ -826,7 +863,6 @@ export default function ChatInterface({
             setMessages(prev => [...prev, assistantMsg]);
           }
           setStreamText('');
-          setStreamSources([]);
           setGenerating(false);
           inputRef.current?.focus();
         },
@@ -842,10 +878,10 @@ export default function ChatInterface({
     }
   };
 
-  const handleSuggestionClick = async (chip: SuggestionChip, msgId: string, msgContent: string) => {
+  const handleSuggestionClick = async (chip: SuggestionChip, msgContent: string) => {
     if (generating || selectedSuggestionId) return;
     setSelectedSuggestionId(chip.id);
-    await handleFollowUp(chip.label, chip.prompt, msgId, msgContent);
+    await handleFollowUp(chip.label, chip.prompt, msgContent);
     setSelectedSuggestionId(null);
   };
 
@@ -949,7 +985,6 @@ export default function ChatInterface({
 
     setGenerating(true);
     setStreamText('');
-    setStreamSources([]);
 
     try {
       await ragAnswer(
@@ -972,7 +1007,6 @@ export default function ChatInterface({
               console.error('Failed to save regenerated assistant message', err);
             } finally {
               setStreamText('');
-              setStreamSources([]);
               setGenerating(false);
               inputRef.current?.focus();
             }
@@ -1035,9 +1069,7 @@ export default function ChatInterface({
           </div>
 
           {loadingSessions ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
-              <div className="spinner" style={{ width: 16, height: 16 }} />
-            </div>
+            <CompactSessionSkeleton />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               {sessions.map(s => {
@@ -1095,8 +1127,8 @@ export default function ChatInterface({
                 <span style={{ fontSize: '0.6rem' }}>{sidebarNotebookExpanded ? '▼' : '▶'}</span>
               </button>
               
-              {sidebarNotebookExpanded && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '6px', paddingLeft: '4px' }}>
+              <div className={`collapsible-wrapper ${sidebarNotebookExpanded ? 'expanded' : ''}`}>
+                <div className="collapsible-content" style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingLeft: '4px' }}>
                   {Object.keys(savedAnswers).length === 0 ? (
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '6px 8px', fontStyle: 'italic' }}>
                       No saved answers.
@@ -1119,7 +1151,7 @@ export default function ChatInterface({
                     ))
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Recent Doubts collapsible */}
@@ -1137,8 +1169,8 @@ export default function ChatInterface({
                 <span style={{ fontSize: '0.6rem' }}>{sidebarDoubtsExpanded ? '▼' : '▶'}</span>
               </button>
               
-              {sidebarDoubtsExpanded && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '6px', paddingLeft: '4px' }}>
+              <div className={`collapsible-wrapper ${sidebarDoubtsExpanded ? 'expanded' : ''}`}>
+                <div className="collapsible-content" style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingLeft: '4px' }}>
                   {recentDoubts.length === 0 ? (
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '6px 8px', fontStyle: 'italic' }}>
                       No recent questions.
@@ -1161,7 +1193,7 @@ export default function ChatInterface({
                     ))
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
           </div>
@@ -1225,34 +1257,36 @@ export default function ChatInterface({
             </span>
           </button>
 
-          {docsExpanded && (
-            <div className="doc-drawer-content" style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border-color)', marginTop: '8px', paddingTop: '12px' }}>
-              {allDocuments.length === 0 ? (
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
-                  No documents uploaded yet.{' '}
-                  <button onClick={onBackToDashboard}
-                    style={{ background: 'none', border: 'none', color: 'var(--primary-light)',
-                      cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 'inherit' }}>
-                    Go to dashboard
-                  </button>{' '}
-                  to upload files.
-                </p>
-              ) : (
-                <div className="doc-chip-container">
-                  {allDocuments.map(doc => (
-                    <div key={doc.id}
-                      className={`doc-chip ${selectedDocs.some(d => d.id === doc.id) ? 'selected' : ''}`}
-                      onClick={() => toggleDoc(doc)}>
-                      <FileText size={11} />
-                      <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {doc.file_name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className={`collapsible-wrapper ${docsExpanded ? 'expanded' : ''}`} style={{ borderTop: docsExpanded ? '1px solid var(--border-color)' : '1px solid transparent', transition: 'all var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div className="collapsible-content">
+              <div className="doc-drawer-content" style={{ padding: '8px 16px 16px', paddingTop: '12px' }}>
+                {allDocuments.length === 0 ? (
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                    No documents uploaded yet.{' '}
+                    <button onClick={onBackToDashboard}
+                      style={{ background: 'none', border: 'none', color: 'var(--primary-light)',
+                        cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 'inherit' }}>
+                      Go to dashboard
+                    </button>{' '}
+                    to upload files.
+                  </p>
+                ) : (
+                  <div className="doc-chip-container">
+                    {allDocuments.map(doc => (
+                      <div key={doc.id}
+                        className={`doc-chip ${selectedDocs.some(d => d.id === doc.id) ? 'selected' : ''}`}
+                        onClick={() => toggleDoc(doc)}>
+                        <FileText size={11} />
+                        <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {doc.file_name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Messages */}
@@ -1263,12 +1297,8 @@ export default function ChatInterface({
             </div>
           ) : messages.length === 0 && !streamText ? (
             /* Empty state */
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: '16px',
-              textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%',
-                background: 'var(--primary-glow)', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', color: 'var(--primary-light)' }}>
+            <div className="chat-empty-state">
+              <div className="chat-empty-state-icon-wrap">
                 <BookOpen size={28} />
               </div>
               <div>
@@ -1287,13 +1317,8 @@ export default function ChatInterface({
                   {['Summarise the key concepts', 'Give me a quiz on this', 'Explain the main topic'].map(suggestion => (
                     <button key={suggestion}
                       onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
-                      style={{
-                        background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
-                        color: 'var(--text-secondary)', borderRadius: '20px', padding: '6px 14px',
-                        fontSize: '0.8rem', cursor: 'pointer', transition: 'all var(--transition-fast)',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}>
+                      className="empty-state-suggestion"
+                    >
                       {suggestion}
                     </button>
                   ))}
@@ -1343,7 +1368,6 @@ export default function ChatInterface({
                   {msg.sender_role === 'assistant' && (idx !== messages.length - 1) && (
                     <ActionBar
                       msgId={msg.id}
-                      msgContent={msg.content}
                       sources={(msg.sources || []) as RagSource[]}
                       sourcesVisible={visibleSourceIds.has(msg.id)}
                       loadingKey={actionLoadingKey}
@@ -1363,7 +1387,7 @@ export default function ChatInterface({
                   {msg.sender_role === 'assistant' && (idx === messages.length - 1) && !generating && (
                     <SuggestionChips
                       msgContent={msg.content}
-                      onSelect={(chip) => handleSuggestionClick(chip, msg.id, msg.content)}
+                      onSelect={(chip) => handleSuggestionClick(chip, msg.content)}
                       loadingId={selectedSuggestionId}
                       disabled={generating || selectedSuggestionId !== null}
                     />
@@ -1380,6 +1404,15 @@ export default function ChatInterface({
                   <div className="answer-generating">
                     <div className="spinner" style={{ width: 10, height: 10 }} />
                     Generating…
+                  </div>
+                </div>
+              )}
+
+              {/* Skeleton loading bubble during initial prompt process wait */}
+              {generating && !streamText && (
+                <div className="message-bubble assistant">
+                  <div className="message-content">
+                    <AnswerSkeletonLoader />
                   </div>
                 </div>
               )}
@@ -1559,7 +1592,6 @@ export default function ChatInterface({
 
 interface ActionBarProps {
   msgId: string;
-  msgContent: string;
   sources: RagSource[];
   sourcesVisible: boolean;
   loadingKey: string | null;
@@ -1583,7 +1615,7 @@ const PRIMARY_ACTIONS: { id: ActionType; icon: string; label: string }[] = [
 ];
 
 function ActionBar({
-  msgId, msgContent, sources, sourcesVisible,
+  msgId, sources, sourcesVisible,
   loadingKey, isCopied, isSaved, disabled,
   onAction, onToggleSources, onCopy, onSave, onOpenSource, onToast,
 }: ActionBarProps) {
