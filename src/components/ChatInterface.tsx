@@ -20,33 +20,157 @@ interface ChatInterfaceProps {
   showToast: (message: string, type: 'success' | 'error' | 'warning') => void;
 }
 
-// ─── Markdown renderer ────────────────────────────────────────────────────────
+// ─── Structured answer renderer ───────────────────────────────────────────────
 
-function renderMarkdown(raw: string): { __html: string } {
-  let html = raw
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+interface AnswerSection {
+  heading: string;
+  lines: string[];
+}
 
-  html = html.replace(/^### (.+)$/gim,
-    '<h3 style="margin:14px 0 6px;color:var(--text-primary);font-size:1.05rem">$1</h3>');
-  html = html.replace(/^#### (.+)$/gim,
-    '<h4 style="margin:10px 0 4px;color:var(--text-primary);font-size:0.95rem">$1</h4>');
-  html = html.replace(/\*\*(.+?)\*\*/g,
-    '<strong style="color:var(--text-primary)">$1</strong>');
-  html = html.replace(/\*(.+?)\*/g,
-    '<em style="color:var(--text-secondary)">$1</em>');
-  html = html.replace(/`([^`]+)`/g,
-    '<code style="background:var(--bg-surface-elevated);padding:2px 6px;border-radius:4px;font-family:monospace;font-size:0.83em;color:var(--primary-light)">$1</code>');
-  html = html.replace(/^- (.+)$/gim,
-    '<li style="margin-left:18px;margin-bottom:4px;list-style:disc">$1</li>');
+/** Maps heading keywords → { icon, accent colour class } */
+const SECTION_META: Record<string, { icon: string; accent: string }> = {
+  summary:        { icon: '📋', accent: 'accent-blue'   },
+  'key concepts': { icon: '🔑', accent: 'accent-purple' },
+  'key points':   { icon: '🔑', accent: 'accent-purple' },
+  'key concept':  { icon: '🔑', accent: 'accent-purple' },
+  explanation:    { icon: '💡', accent: 'accent-yellow'  },
+  'tech stack':   { icon: '🛠️', accent: 'accent-teal'   },
+  technologies:   { icon: '🛠️', accent: 'accent-teal'   },
+  challenges:     { icon: '⚡', accent: 'accent-orange'  },
+  difficulties:   { icon: '⚡', accent: 'accent-orange'  },
+  learning:       { icon: '📚', accent: 'accent-green'   },
+  'what i learned': { icon: '📚', accent: 'accent-green' },
+  sources:        { icon: '📄', accent: 'accent-gray'    },
+  references:     { icon: '📄', accent: 'accent-gray'    },
+  analysis:       { icon: '🔬', accent: 'accent-purple'  },
+  results:        { icon: '📊', accent: 'accent-teal'    },
+  conclusion:     { icon: '✅', accent: 'accent-green'   },
+  overview:       { icon: '🗺️', accent: 'accent-blue'   },
+  'study tips':   { icon: '✏️', accent: 'accent-pink'   },
+  'revision tips': { icon: '✏️', accent: 'accent-pink'  },
+  'synthesized summary': { icon: '📋', accent: 'accent-blue' },
+  'section reference': { icon: '📌', accent: 'accent-gray' },
+};
 
-  return {
-    __html: html.split('\n').map(line => {
-      const t = line.trim();
-      if (!t) return '<div style="height:6px"></div>';
-      if (t.startsWith('<h') || t.startsWith('<li')) return line;
-      return `<p style="margin-bottom:7px">${line}</p>`;
-    }).join(''),
-  };
+function getSectionMeta(heading: string): { icon: string; accent: string } {
+  const lower = heading.toLowerCase().replace(/[📘📝💡✏️🔑📋🛠️⚡📚📄🔬📊✅🗺️📌:]/g, '').trim();
+  for (const key of Object.keys(SECTION_META)) {
+    if (lower.includes(key)) return SECTION_META[key];
+  }
+  return { icon: '📖', accent: 'accent-gray' };
+}
+
+/**
+ * Inline text renderer — handles **bold**, *italic*, `code`, and plain text.
+ */
+function renderInline(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    if (m[2]) parts.push(<strong key={m.index} style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{m[2]}</strong>);
+    else if (m[3]) parts.push(<em key={m.index} style={{ color: 'var(--text-secondary)' }}>{m[3]}</em>);
+    else if (m[4]) parts.push(<code key={m.index} style={{ background: 'var(--bg-surface-elevated)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.83em', color: 'var(--primary-light)' }}>{m[4]}</code>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
+/**
+ * Parses an array of content lines into bullet items or paragraphs.
+ */
+function renderLines(lines: string[]): React.ReactNode {
+  return lines.map((line, i) => {
+    const stripped = line.replace(/^[-•●▪◦■☑✓]\s*/, '').trim();
+    if (!stripped) return null;
+    const isBullet = /^[-•●▪◦■☑✓]/.test(line.trim());
+    if (isBullet) {
+      return (
+        <div key={i} className="answer-bullet">
+          <div className="answer-bullet-dot" />
+          <div className="answer-bullet-text">{renderInline(stripped)}</div>
+        </div>
+      );
+    }
+    return (
+      <p key={i} className="answer-paragraph">{renderInline(stripped)}</p>
+    );
+  });
+}
+
+/**
+ * Full structured answer renderer.
+ * Splits the raw text into sections by ### or #### headings, then
+ * renders each section as a visually distinct card. Falls back to a
+ * plain styled bubble when there are no headings.
+ */
+function StructuredAnswer({ raw }: { raw: string }) {
+  const sections: AnswerSection[] = [];
+  let currentHeading = '';
+  let currentLines: string[] = [];
+
+  raw.split('\n').forEach(rawLine => {
+    const line = rawLine.trimEnd();
+    const headingMatch = line.match(/^#{1,4}\s+(.+)/);
+    if (headingMatch) {
+      if (currentHeading || currentLines.some(l => l.trim())) {
+        sections.push({ heading: currentHeading, lines: currentLines });
+      }
+      currentHeading = headingMatch[1].replace(/[*_]/g, '').trim();
+      currentLines = [];
+    } else {
+      currentLines.push(line);
+    }
+  });
+  // push last section
+  if (currentHeading || currentLines.some(l => l.trim())) {
+    sections.push({ heading: currentHeading, lines: currentLines });
+  }
+
+  // No headings found — plain bubble fallback
+  if (sections.length === 0 || (sections.length === 1 && !sections[0].heading)) {
+    return (
+      <div className="answer-plain">
+        {renderLines(raw.split('\n'))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="answer-body">
+      {sections.map((sec, idx) => {
+        const bodyLines = sec.lines.filter(l => l.trim());
+        if (!sec.heading && bodyLines.length === 0) return null;
+
+        // Intro paragraph (no heading) rendered as plain bubble
+        if (!sec.heading) {
+          return (
+            <div key={idx} className="answer-plain">
+              {renderLines(bodyLines)}
+            </div>
+          );
+        }
+
+        const { icon, accent } = getSectionMeta(sec.heading);
+        return (
+          <div key={idx} className={`section-card ${accent}`}>
+            <div className="section-header">
+              <div className="section-icon-wrap">{icon}</div>
+              <div className="section-title">{sec.heading}</div>
+            </div>
+            {bodyLines.length > 0 && (
+              <div className="section-body">
+                {renderLines(bodyLines)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -416,8 +540,12 @@ export default function ChatInterface({
             <>
               {messages.map(msg => (
                 <div key={msg.id} className={`message-bubble ${msg.sender_role}`}>
-                  <div className="message-content"
-                    dangerouslySetInnerHTML={renderMarkdown(msg.content)} />
+                  <div className="message-content">
+                    {msg.sender_role === 'user'
+                      ? <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                      : <StructuredAnswer raw={msg.content} />
+                    }
+                  </div>
                   {msg.sender_role === 'assistant' && msg.sources?.length > 0 && (
                     <SourceTags sources={msg.sources} onToast={showToast} />
                   )}
@@ -427,14 +555,13 @@ export default function ChatInterface({
               {/* Live streaming bubble */}
               {streamText && (
                 <div className="message-bubble assistant">
-                  <div className="message-content"
-                    dangerouslySetInnerHTML={renderMarkdown(streamText)} />
+                  <div className="message-content">
+                    <StructuredAnswer raw={streamText} />
+                  </div>
                   {streamSources.length > 0 && (
                     <SourceTags sources={streamSources} onToast={showToast} />
                   )}
-                  {/* Blinking cursor indicator */}
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
-                    fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                  <div className="answer-generating">
                     <div className="spinner" style={{ width: 10, height: 10 }} />
                     Generating…
                   </div>
