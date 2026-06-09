@@ -81,7 +81,7 @@ async function extractContentText(file: File): Promise<string> {
     try {
       console.info(`Starting PDF text extraction for: ${file.name}`);
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
       let fullText = '';
       
       for (let i = 1; i <= pdf.numPages; i++) {
@@ -205,10 +205,18 @@ export async function uploadDocument(
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const filePath = `${userId}/${Date.now()}_${sanitizedName}`;
 
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    let resolvedContentType = file.type;
+    if (!resolvedContentType) {
+      if (ext === '.pdf') resolvedContentType = 'application/pdf';
+      else if (ext === '.txt') resolvedContentType = 'text/plain';
+      else if (ext === '.md') resolvedContentType = 'text/markdown';
+    }
+
     const { error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(filePath, file, {
-        contentType: file.type || 'application/octet-stream',
+        contentType: resolvedContentType || 'application/octet-stream',
         upsert: false, // Never silently overwrite an existing file
       });
 
