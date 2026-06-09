@@ -1480,7 +1480,7 @@ export default function ChatInterface({
 
                   {/* Topic Tags Pills */}
                   {msg.sender_role === 'assistant' && (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div className="message-tags-container">
                       <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tags:</span>
                       {STUDY_TAGS.map(tag => {
                         const active = (messageTags[msg.id] || []).includes(tag);

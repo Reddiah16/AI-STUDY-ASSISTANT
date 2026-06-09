@@ -473,16 +473,16 @@ button, input, textarea, select {
 .chat-messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 32px 24px; /* Extra vertical padding for breathing room */
   display: flex;
   flex-direction: column;
-  gap: 24px; /* Increased spacing between message blocks */
+  gap: 48px; /* High breathing room between questions and answers */
 }
 
 @media (max-width: 768px) {
   .chat-messages-container {
     padding: 16px;
-    gap: 16px;
+    gap: 24px;
   }
 }
 
@@ -490,7 +490,7 @@ button, input, textarea, select {
   max-width: 88%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -501,7 +501,7 @@ button, input, textarea, select {
 .message-bubble.assistant {
   align-self: center;
   width: 100%;
-  max-width: 780px;
+  max-width: 700px; /* Keep readable line length around 60–80 characters */
 }
 
 @media (max-width: 768px) {
@@ -518,10 +518,10 @@ button, input, textarea, select {
 }
 
 .message-content {
-  padding: 16px 20px;
-  border-radius: 14px;
-  font-size: 0.95rem;
-  line-height: 1.7;
+  padding: 20px 24px; /* Spacious bubble padding */
+  border-radius: 16px;
+  font-size: 0.98rem;
+  line-height: 1.8; /* Increased line-height for body text */
   box-shadow: var(--shadow-sm);
 }
 
@@ -541,13 +541,21 @@ button, input, textarea, select {
   color: var(--text-primary);
 }
 
+.message-tags-container {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px; /* Generous space above tags */
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 /* ── Structured Answer Body ─────────────────────────────────────── */
 .answer-body {
   display: flex;
   flex-direction: column;
-  gap: 32px; /* Generous visual separation between sections */
+  gap: 48px; /* Generous visual separation between sections */
   width: 100%;
-  max-width: 780px; /* Slightly wider reading column to accommodate larger text */
+  max-width: 700px; /* Optimized reading column width (60-80 chars) */
   margin: 0 auto;
 }
 
@@ -555,12 +563,12 @@ button, input, textarea, select {
   background: hsl(223, 28%, 9%); /* Solid refined matte dark surface */
   border: 1px solid hsla(217, 20%, 30%, 0.18);
   border-radius: 16px; /* High-end rounded corners */
-  padding: 26px 32px; /* Generous interior padding */
+  padding: 36px 44px; /* Generous interior padding for breathing room */
   font-size: 1.1rem; /* Large, readable body text */
-  line-height: 1.9; /* Spacious line height for effortless scanning */
+  line-height: 2.0; /* Spacious line height for effortless scanning */
   color: hsl(215, 20%, 82%); /* Premium off-white readability */
   border-bottom-left-radius: 2px;
-  max-width: 780px;
+  max-width: 700px;
   margin: 0 auto;
   box-shadow: 0 12px 36px -12px rgba(0, 0, 0, 0.55), inset 0 1px 1px hsla(0, 0%, 100%, 0.02);
 }
@@ -591,8 +599,8 @@ button, input, textarea, select {
 .section-header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 22px 32px 18px; /* Enhanced vertical/horizontal padding */
+  gap: 16px;
+  padding: 30px 44px 22px; /* Enhanced vertical/horizontal padding */
   background: transparent;
   border-bottom: 1px solid hsla(217, 20%, 30%, 0.12); /* Soft visible divider */
 }
@@ -620,13 +628,13 @@ button, input, textarea, select {
 }
 
 .section-body {
-  padding: 22px 32px 28px; /* Increased internal padding rhythm */
+  padding: 28px 44px 38px; /* Increased internal padding rhythm for more breathing room */
   font-size: 1.1rem; /* Large scanable body font */
-  line-height: 1.9; /* Generous spacing between lines */
+  line-height: 2.0; /* Generous spacing between lines */
   color: hsl(215, 20%, 82%);
   display: flex;
   flex-direction: column;
-  gap: 16px; /* More space between paragraphs */
+  gap: 24px; /* More space between paragraphs and sections */
 }
 .section-body p, .section-body li, .section-body .answer-bullet-text {
   color: hsl(215, 20%, 82%);
@@ -634,26 +642,26 @@ button, input, textarea, select {
 
 .answer-bullet {
   display: flex;
-  gap: 14px; /* More spacing between dot and bullet text */
+  gap: 16px; /* More spacing between dot and bullet text */
   align-items: flex-start;
-  padding: 6px 0;
+  padding: 10px 0; /* Extra vertical space around bullets */
 }
 .answer-bullet-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: var(--primary-light);
-  margin-top: 11px; /* Center aligned with larger body text */
+  margin-top: 12px; /* Center aligned with larger body text */
   flex-shrink: 0;
 }
 .answer-bullet-text {
   flex: 1;
-  line-height: 1.8;
+  line-height: 1.95; /* Spacious line height for bullets */
 }
 
 .answer-paragraph {
   margin: 0;
-  line-height: 1.9;
+  line-height: 2.0; /* Enlarge line-height for reading comfort */
   color: hsl(215, 20%, 82%);
 }
 
@@ -925,12 +933,12 @@ button, input, textarea, select {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 12px;
+  padding: 10px 16px; /* Extra padding inside action bar */
   background: hsla(223, 30%, 6%, 0.15); /* Premium integrated container */
   border: 1px solid hsla(217, 20%, 30%, 0.22);
   border-radius: 12px;
-  margin-top: 14px;
-  max-width: 740px;
+  margin-top: 28px; /* More breathing room under answer and above actions */
+  max-width: 700px;
   margin-left: auto;
   margin-right: auto;
   animation: fadeIn 0.25s ease-out;
@@ -1123,10 +1131,10 @@ button, input, textarea, select {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-color);
+  gap: 8px;
+  margin-top: 32px; /* Increased margin for better separation */
+  padding-top: 18px; /* Increased padding */
+  border-top: 1px dashed var(--border-color); /* Premium dashed separator */
 }
 .source-chip-label {
   font-size: 0.7rem;
@@ -1360,12 +1368,12 @@ button, input, textarea, select {
 .grounding-warning {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  line-height: 1.55;
+  gap: 10px;
+  margin-top: 24px; /* More vertical distance */
+  padding: 14px 18px; /* More interior padding */
+  border-radius: 10px;
+  font-size: 0.82rem;
+  line-height: 1.6;
   background: hsla(45, 93%, 58%, 0.06);
   border: 1px solid hsla(45, 93%, 58%, 0.2);
   color: hsl(45, 93%, 65%);
