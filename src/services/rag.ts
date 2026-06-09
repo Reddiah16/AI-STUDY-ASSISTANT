@@ -19,6 +19,7 @@ import {
   queryMockVectorStore,
   streamGroundedAnswer,
   generateEmbedding,
+  getEmbeddingProvider,
   type DocumentChunk,
 } from './ai';
 
@@ -71,7 +72,10 @@ async function retrieveRelevantChunks(
     return [];
   }
 
-  if (isSupabaseConfigured) {
+  const provider = getEmbeddingProvider();
+  const isMockProvider = provider.constructor.name === 'MockEmbeddingProvider';
+
+  if (isSupabaseConfigured && !isMockProvider) {
     try {
       console.info('[RAG Retrieval] Generating query embedding via configured provider...');
       const queryEmbedding = await generateEmbedding(query);
