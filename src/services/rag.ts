@@ -156,7 +156,7 @@ export async function ragAnswer(
   console.info(`[RAG Pipeline] Processing prompt. SessionId=${request.sessionId}`);
   try {
     // ── Step 1: Retrieve ───────────────────────────────────────────────────
-    const matchedChunks = await retrieveRelevantChunks(query, documentIds);
+    const matchedChunks = await retrieveRelevantChunks(query, documentIds, 6);
 
     // ── Step 2: Build citations ────────────────────────────────────────────
     const sources: RagSource[] = matchedChunks.map((chunk) => ({
