@@ -163,17 +163,22 @@ export async function semanticRetrieval(
       }
     });
 
-    // Add a tiny bit of random variance to simulate float calculations
-    score += (Math.sin(chunk.content.length) + 1) * 0.05;
+    const variance = (Math.sin(chunk.content.length) + 1) * 0.05;
+
+    // Strict filter: similarity is only set if we had actual keyword matches
+    const similarity = score > 0 
+      ? Math.min(0.99, score / 5 + 0.4 + variance) 
+      : 0;
 
     return {
       ...chunk,
-      similarity: Math.min(0.99, score / 5 + 0.4) // Scale score to represent cosine similarity (0.4 - 0.99)
+      similarity
     };
   });
 
-  // Sort descending by similarity score
+  // Sort descending by similarity score and filter out zero-similarity chunks
   return chunksWithScores
+    .filter(c => (c.similarity ?? 0) > 0)
     .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
     .slice(0, limit);
 }
@@ -233,125 +238,68 @@ export class MockLlmProvider implements LlmProvider {
         const stopWords = new Set(['what','how','does','explain','why','where','when','who','which','about','from','with','your','study','this','that','these','those','there','their']);
         const queryWords = query.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
 
-        // Score and rank sentences
+        // Score and rank sentences, keeping only those with at least one keyword match (score > 0)
         const scored = sentences.map(s => {
           let score = 0;
           const lower = s.text.toLowerCase();
           queryWords.forEach(w => { if (lower.includes(w)) score += 3; });
-          score += Math.min(2, s.text.length / 60);
           return { ...s, score };
-        }).sort((a, b) => b.score - a.score);
+        }).filter(s => s.score > 0)
+          .sort((a, b) => b.score - a.score);
 
-        // Deduplicate and pick top 6
+        // Deduplicate
         const relevant: typeof scored = [];
         const seen = new Set<string>();
         for (const s of scored) {
           const norm = s.text.toLowerCase().replace(/[^a-z0-9]/g, '');
           if (!seen.has(norm)) { seen.add(norm); relevant.push(s); }
-          if (relevant.length >= 6) break;
-        }
-        while (relevant.length < 3 && relevant.length < scored.length) {
-          relevant.push(scored[relevant.length]);
+          if (relevant.length >= 5) break;
         }
 
-        const allSourceIds = [...new Set(relevant.map(s => s.sourceIdx))].join(', ');
-
-        // ── ### Summary — direct sentence + 2 paragraphs ─────────────────────
-        body += `### Summary\n`;
-        body += `**Direct Answer:** ${relevant[0]?.text || `The topic of "${query}" is addressed in the selected study materials.`} [Source ${relevant[0]?.sourceIdx || 1}]\n\n`;
-
-        const para1Sentences = relevant.slice(0, 3).map(s => `${s.text} [Source ${s.sourceIdx}]`).join('. ');
-        body += `${para1Sentences}.\n\n`;
-
-        if (relevant.length > 3) {
-          const para2Sentences = relevant.slice(3).map(s => `${s.text} [Source ${s.sourceIdx}]`).join('. ');
-          body += `${para2Sentences}. Together, these points establish a comprehensive understanding of the concept and its implications within the broader subject area.\n\n`;
+        if (relevant.length === 0) {
+          // Source is weak or missing matching information
+          body += `### Summary\n`;
+          body += `I cannot find a full answer in the selected study documents because the sources are missing or weak. No relevant matching information was found in the documents for your question.`;
         } else {
-          body += `Understanding this topic requires careful attention to both the definitions established in the source material and the relationships between the individual components described above. The passages retrieved from the selected documents provide a solid foundation for approaching exam questions and practical applications of this subject.\n\n`;
+          // ── ### Summary ───────────────────────────────────────────────────
+          body += `### Summary\n`;
+          body += `**Direct Answer:** ${relevant[0].text} [Source ${relevant[0].sourceIdx}]\n\n`;
+          if (relevant[1]) {
+            body += `${relevant[1].text} [Source ${relevant[1].sourceIdx}]. `;
+          }
+          if (relevant[2]) {
+            body += `${relevant[2].text} [Source ${relevant[2].sourceIdx}].`;
+          }
+          body += `\n\n`;
+
+          // ── ### Key Points ─────────────────────────────────────────────────
+          body += `### Key Points\n`;
+          relevant.forEach((s) => {
+            const titleWords = s.text.split(' ').slice(0, 4).join(' ').replace(/[^a-zA-Z0-9\s]/g, '').replace(/^[a-z]/, c => c.toUpperCase());
+            body += `- **${titleWords}**: ${s.text} [Source ${s.sourceIdx}]\n`;
+          });
+          body += `\n`;
+
+          // ── ### Explanation (only if explicit examples or code appear in sources) ──
+          const explanationSentences = relevant.filter(s => 
+            /example|e\.g\.|such as|for instance|code|illustrate|scenario/i.test(s.text)
+          );
+          if (explanationSentences.length > 0) {
+            body += `### Explanation\n`;
+            explanationSentences.forEach((s) => {
+              body += `${s.text} [Source ${s.sourceIdx}].\n\n`;
+            });
+          }
+
+          // ── ### Conclusion ────────────────────────────────────────────────
+          body += `### Conclusion\n`;
+          body += `Based strictly on the retrieved files, the core finding is that ${relevant[0].text.replace(/^[A-Z]/, c => c.toLowerCase())} [Source ${relevant[0].sourceIdx}].`;
         }
-
-        // ── ### Key Points — bullets with explanation ─────────────────────────
-        body += `### Key Points\n`;
-        body += `The following key points are grounded directly in the retrieved study material:\n\n`;
-        relevant.forEach((s) => {
-          const titleWords = s.text.split(' ').slice(0, 5).join(' ').replace(/[^a-zA-Z0-9\s]/g, '').replace(/^[a-z]/, c => c.toUpperCase());
-          body += `- **${titleWords}**: ${s.text} [Source ${s.sourceIdx}]\n`;
-        });
-        body += `\n`;
-
-        // ── ### Explanation — deep paragraph + example ────────────────────────
-        body += `### Explanation\n`;
-        body += `To understand **"${query}"** in depth, it is important to examine how the individual components described in the sources relate to one another. `;
-        body += `The retrieved passages reveal that ${relevant[0]?.text || 'the core principle involves a structured approach to the subject matter'} [Source ${relevant[0]?.sourceIdx || 1}]. `;
-        if (relevant[1]) {
-          body += `This is closely connected to the observation that ${relevant[1].text} [Source ${relevant[1].sourceIdx}]. `;
-        }
-        body += `Taken together, these elements form a coherent framework that governs how this concept functions in practice. A failure to understand any one of these components in isolation can lead to gaps in comprehension, particularly when answering application-based or scenario-driven exam questions.\n\n`;
-
-        if (relevant[2]) {
-          body += `Furthermore, ${relevant[2].text} [Source ${relevant[2].sourceIdx}]. This adds another layer of meaning to the topic, indicating that the concept is not merely definitional but has real structural and procedural implications. Students are advised to focus not only on what the term means but on how it is applied and what consequences arise from its correct or incorrect application.\n\n`;
-        }
-
-        body += `#### Example:\n`;
-        const isCode = queryWords.some(w => ['code','program','function','class','algorithm','python','javascript','database','sql','api','react'].includes(w));
-        if (isCode) {
-          body += `Consider the following practical implementation that illustrates this concept:\n`;
-          body += `\`\`\`typescript\n// Example demonstrating the concept from [Source ${allSourceIds}]\nasync function applyConceptPipeline(input: string): Promise<string> {\n  // Step 1: Validate input according to the rules defined in source material\n  if (!input || input.trim() === '') throw new Error('Input must be non-empty.');\n  // Step 2: Process according to the methodology described\n  const processed = input.split(' ').map(word => word.toUpperCase()).join('-');\n  // Step 3: Return a structured result\n  return \`Result: \${processed}\`;\n}\n\`\`\`\nIn this example, each step mirrors the structured methodology outlined in the source documents.\n\n`;
-        } else {
-          const kw = queryWords[0] ? queryWords[0].charAt(0).toUpperCase() + queryWords[0].slice(1) : 'Concept';
-          body += `**Real-World Scenario:** Consider a situation where a student or practitioner must apply **${kw}** in a structured setting.\n`;
-          body += `- **Setup:** The scenario begins with a defined problem or requirement, as described in the study material.\n`;
-          body += `- **Application:** The individual applies the rules and definitions from the source — specifically, *"${relevant[0]?.text || 'the core principle'}"* — to guide their decision-making.\n`;
-          body += `- **Outcome:** The result aligns with the expected behaviour described in [Source ${allSourceIds}], demonstrating that a correct understanding of the concept leads to predictable, well-reasoned conclusions.\n\n`;
-        }
-
-        // ── ### Revision Notes — self-test bullets ────────────────────────────
-        body += `### Revision Notes\n`;
-        body += `Use the following checklist to consolidate your understanding before an exam or assessment:\n\n`;
-        body += `- **Define the concept**: Write a one-sentence definition of *${query}* without looking at your notes. Compare it to [Source ${relevant[0]?.sourceIdx || 1}].\n`;
-        body += `- **List the key components**: From memory, list the main points covered in the Key Points section above. Aim to recall at least 3 without prompting.\n`;
-        if (queryWords.length > 0) {
-          body += `- **Use the vocabulary**: Write a short paragraph using the terms **${queryWords.slice(0, 3).map(w => w.toUpperCase()).join(', ')}** correctly in context.\n`;
-        }
-        body += `- **Apply to a scenario**: Describe a real or hypothetical situation where this concept would be applied. What decisions would you make and why?\n`;
-        body += `- **Self-test question**: How does the information in [Source ${allSourceIds}] directly support or illustrate the concept of *${query}*? Write your answer in 3–4 sentences.\n\n`;
-
-        // ── ### Conclusion ────────────────────────────────────────────────────
-        body += `### Conclusion\n`;
-        body += `In conclusion, the study materials retrieved from your selected documents provide a well-grounded, multi-faceted explanation of **"${query}"**. The key insight is that ${relevant[0]?.text || 'the concept is well-defined and practically applicable'} [Source ${relevant[0]?.sourceIdx || 1}]. By working through the paragraphs and bullet points above, reviewing the provided example, and completing the revision notes, you will be well-prepared to answer both theoretical and application-based questions on this topic.`;
 
       } else {
-        // ── No chunks selected: structured general knowledge response ─────────
+        // ── No chunks selected ─────────
         body += `### Summary\n`;
-        body += `**Direct Answer:** No study documents are currently selected, so this answer is based on general academic knowledge about **"${query}"**.\n\n`;
-        body += `To study any topic effectively, it is essential to first understand its foundational definitions, then explore the mechanisms and processes through which it operates, and finally connect it to real-world applications or examples. This layered approach — moving from definition to theory to practice — is a well-established method in academic study and forms the backbone of how examiners design questions. For **"${query}"**, this means beginning with the core terminology, understanding how the underlying system or concept functions, and then applying that understanding to solve problems or answer scenario-based questions.\n\n`;
-        body += `Without access to your specific course materials, this response draws on standard academic principles. Please upload and select your PDFs or notes to receive answers grounded directly in your syllabus and textbook content. Doing so will significantly improve the precision and relevance of every response.\n\n`;
-
-        body += `### Key Points\n`;
-        body += `The following points reflect the general academic treatment of this type of topic:\n\n`;
-        body += `- **Base Definition and Scope**: Every topic begins with a clear definition that establishes its boundaries. Understanding what the concept *is* — and equally what it is *not* — is the first step to mastering it.\n`;
-        body += `- **Core Mechanisms and Processes**: Most academic topics involve a set of rules, steps, or processes that explain how the concept works. These should be understood in sequence, not in isolation.\n`;
-        body += `- **Theoretical Foundations**: Academic subjects are grounded in theory. Understanding the *why* behind a concept — the assumptions and principles that support it — deepens comprehension and enables flexible application.\n`;
-        body += `- **Practical Application and Use Cases**: The ability to apply a concept to a new or unfamiliar scenario is what distinguishes surface-level memorisation from genuine understanding.\n\n`;
-
-        body += `### Explanation\n`;
-        body += `When approaching **"${query}"** from an academic standpoint, it is important to recognise that this concept does not exist in isolation. It is connected to a broader set of ideas, frameworks, and methods that form the context within which it operates. In an exam setting, questions on this topic are likely to test not just your recall of the definition, but your ability to explain the mechanism, compare it with related concepts, and apply it to a given situation.\n\n`;
-        body += `A strong approach is to treat the concept as a structured system: identify its inputs, processes, and outputs, or its causes, characteristics, and consequences. This framework can be applied universally and tends to produce comprehensive, well-organised exam answers.\n\n`;
-        body += `#### Example:\n`;
-        body += `- **Setup**: A student is asked to explain this concept in an exam scenario with a specific constraint or variable.\n`;
-        body += `- **Application**: They apply the definition and process rules to the scenario, identifying how each component of the concept manifests in context.\n`;
-        body += `- **Conclusion**: By working through each step logically, they arrive at a well-reasoned, evidence-based answer.\n\n`;
-
-        body += `### Revision Notes\n`;
-        body += `Use this checklist to review the topic before your assessment:\n\n`;
-        body += `- **Define it**: Write a one-sentence definition of *${query}* from memory.\n`;
-        body += `- **Explain the mechanism**: In 2–3 sentences, describe *how* it works.\n`;
-        body += `- **Give an example**: Identify one concrete real-world or textbook example.\n`;
-        body += `- **Connect it**: How does this topic relate to at least one other concept in your syllabus?\n`;
-        body += `- **Upload your materials**: For course-specific grounding, upload your PDFs and select them before asking your question.\n\n`;
-
-        body += `### Conclusion\n`;
-        body += `This response provides a general academic framework for approaching **"${query}"**. For answers grounded specifically in your course materials, lecture notes, or textbook, upload them as PDFs, select them in the document panel, and re-ask your question. The assistant will then synthesise a detailed, source-grounded answer tailored to your exact syllabus.`;
+        body += `No active study documents are selected. Please select one or more documents from the context panel above so I can answer your question.`;
       }
 
       // ── Stream the text word-by-word ──────────────────────────────────────
@@ -488,26 +436,23 @@ export function buildGroundedPrompt(
   contextChunks: DocumentChunk[],
   documentNames: string[]
 ): GroundedPromptPayload {
-  const systemPrompt = `You are an expert AI Study Assistant. Your role is to provide academically rigorous, substantive answers grounded in the user's uploaded study material. Never give short, compressed, or thin answers. Do not summarise everything into a single line.
+  const systemPrompt = `You are a strict and highly accurate AI Study Assistant.
+Your primary directive is to treat the provided study materials as the ONLY trusted source of truth.
 
-For every question, follow this exact format:
+Follow these strict rules:
+1. GROUNDEDNESS: Generate your answer ONLY and EXCLUSIVELY from the provided retrieved context chunks. Do not assume, extrapolate, speculate, or bring in any outside knowledge or general facts not explicitly stated in the sources.
+2. FACTUAL MATCH: Every claim you make must be a direct factual match to the provided text. Remove any unsupported claims.
+3. CONCISE ACCURACY: Write concisely, directly, and factually. Do not use filler words, speculative analysis, or general explanations.
+4. SOURCE CITATION: Cite sources (e.g. [Source 1], [Source 2]) for every key fact, definition, or claim.
+5. DISCLAIMER ON WEAK OR MISSING SOURCE: If the provided chunks do not contain enough information to fully answer the question, or if no chunks match the question, you MUST explicitly state: "I cannot find a full answer in the selected study documents because the sources are missing or weak." and only provide what partial context is directly supported. Do not make up any answers.
+6. EXTRA EXPLANATION: Add extra explanation or worked examples ONLY when the retrieved source material explicitly contains them. Do not generate hypothetical code blocks, scenarios, or explanations out of general knowledge.
 
-1. DIRECT ANSWER — A single clear sentence that directly answers the question.
-2. PARAGRAPHS — Write 1 to 3 full, detailed paragraphs that explain the concept in depth. Cover the theory, the context, how it works, why it matters, and any nuances from the retrieved material. Do not compress important ideas. Do not use bullet points in this section.
-3. BULLET POINTS — After the paragraphs, use bullet points to organise key concepts, examples, steps, or revision notes. Each bullet should be substantive — not a single compressed phrase.
-
-Use the following section headings (card-based rendering):
-- ### Summary (Direct answer sentence + 1 to 3 detailed paragraphs)
-- ### Key Points (Bullet points of key concepts, each with a brief explanation)
-- ### Explanation (Deeper analysis paragraph(s) + a worked example or scenario)
-- ### Revision Notes (Bulleted revision checklist and self-test questions)
-- ### Conclusion (A final consolidating paragraph)
-
-Additional rules:
-- For study and conceptual questions, always include explanation, examples, and important takeaways.
-- Always ground the answer in the retrieved source material. Cite sources like [Source 1], [Source 2] where relevant.
-- Do not make answers too short. Do not compress important ideas into a single line.
-- If the retrieved chunks do not contain enough information, state: "I cannot find a full answer in the selected study documents" and provide what partial context is available.`;
+Formatting structure (card-based rendering):
+Use the following headers, but only include a section if there is direct, factual material in the sources to support it. If a section has no source support, omit it entirely.
+- ### Summary (A single-sentence direct answer, followed by concise, strictly grounded paragraph(s))
+- ### Key Points (Fact-based key points with brief definitions, cited from sources)
+- ### Explanation (Explanations or examples ONLY if explicitly present in the sources)
+- ### Conclusion (A final consolidating factual sentence)`;
 
   const userPrompt = contextChunks.length === 0
     ? `No study materials were selected for this query. Provide a clear message to the user: "No active study documents are selected. Please select one or more documents from the context panel above so I can answer your question."`
@@ -516,7 +461,7 @@ ${contextChunks.map((c, i) => `[Source ${i + 1}]: ${c.content}`).join('\n\n')}
 
 User Question: "${query}"
 
-Follow the required format strictly: direct answer sentence, then 1–3 detailed paragraphs, then bullet points. Ground everything in the study materials above.`;
+Answer the question strictly using the provided Study Materials. Prioritize groundedness, factual match, concise accuracy, and active citations. If the sources are weak or missing details to fully answer, state so explicitly.`;
 
   return { systemPrompt, userPrompt };
 }

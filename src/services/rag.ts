@@ -81,10 +81,10 @@ async function retrieveRelevantChunks(
       const queryEmbedding = await generateEmbedding(query);
       console.info('[RAG Retrieval] Query embedding generated successfully.');
 
-      console.info(`[RAG Retrieval] Querying Supabase match_document_chunks RPC with threshold 0.2, topK=${topK}...`);
+      console.info(`[RAG Retrieval] Querying Supabase match_document_chunks RPC with threshold 0.35, topK=${topK}...`);
       const { data, error } = await supabase.rpc('match_document_chunks', {
         query_embedding: queryEmbedding,
-        match_threshold: 0.2, // Low threshold to capture relevant context
+        match_threshold: 0.35, // Stricter threshold for highly relevant context
         match_count: topK,
         filter_document_ids: documentIds,
       });
