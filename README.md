@@ -7,8 +7,20 @@ A premium, responsive, and feature-rich educational workspace built with **React
 ## 🌟 Key Features
 
 *   **Premium Visual Experience**: Modern deep-dark theme built using HSL color systems, complete with smooth animations, custom scrollbars, and card-glassmorphism.
-*   **Intelligent Study Chat**: Interactive chat groundable in one or more uploaded PDF documents. Features live-typing/streaming answers, suggestions, and clean source citation overlays.
-*   **Modular RAG Services**: Features dedicated splitters, placeholder embedding models, and similarity search routines.
+*   **Academic Answer Synthesis**: Grounded answers designed for deep study, structured according to rigorous educational standards:
+    *   **Direct Answer**: Clear 1-sentence response at the very beginning.
+    *   **Substance & Context**: 1 to 3 detailed paragraphs covering explanation, examples, and takeaways.
+    *   **Structured Organization**: Clear bullet points highlighting key concepts, revision notes, and grounded citations.
+*   **Specialized Study Modes**: Dynamic tailwind generation for specific learning strategies:
+    *   📖 **Normal**: Detailed, grounded academic answers.
+    *   👶 **Simple**: Concepts explained with everyday language and intuitive analogies.
+    *   🎓 **Exam Prep**: Formal academic breakdowns featuring sample review questions.
+    *   ⏱️ **2-Mark**: Concise 2-point definition blocks for short-answer practice.
+    *   📝 **5-Mark**: Rich multi-card explanation and conclusion sets.
+    *   📝 **Revision**: Scannable summary sheets for rapid reviewing.
+    *   🃏 **Flashcards**: Active-recall concept deck format (Front/Back).
+    *   ❓ **Quiz**: Generated multiple-choice questions with answers revealed at the bottom.
+*   **Advanced RAG Pipeline**: Uses dedicated text splitters, similarity searches, and an expanded retrieval context (`topK = 6`) feeding 50% more source material into synthesis.
 *   **Dual Mode Capabilities**: Seamlessly switches between full **Supabase Backend Mode** and local-only **Demo Mode** (using LocalStorage for DB/metadata and mock content synthesis for uploads).
 
 ---
