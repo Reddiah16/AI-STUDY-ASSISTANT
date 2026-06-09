@@ -555,7 +555,7 @@ button, input, textarea, select {
   flex-direction: column;
   gap: 48px; /* Generous visual separation between sections */
   width: 100%;
-  max-width: 700px; /* Optimized reading column width (60-80 chars) */
+  max-width: 640px; /* Narrower reading column width for optimized tracking (60-80 chars) */
   margin: 0 auto;
 }
 
@@ -563,12 +563,12 @@ button, input, textarea, select {
   background: hsl(223, 28%, 9%); /* Solid refined matte dark surface */
   border: 1px solid hsla(217, 20%, 30%, 0.18);
   border-radius: 16px; /* High-end rounded corners */
-  padding: 36px 44px; /* Generous interior padding for breathing room */
+  padding: 42px 48px; /* Increased interior padding for better breathing room */
   font-size: 1.1rem; /* Large, readable body text */
   line-height: 2.0; /* Spacious line height for effortless scanning */
   color: hsl(215, 20%, 82%); /* Premium off-white readability */
   border-bottom-left-radius: 2px;
-  max-width: 700px;
+  max-width: 640px;
   margin: 0 auto;
   box-shadow: 0 12px 36px -12px rgba(0, 0, 0, 0.55), inset 0 1px 1px hsla(0, 0%, 100%, 0.02);
 }
@@ -628,13 +628,13 @@ button, input, textarea, select {
 }
 
 .section-body {
-  padding: 28px 44px 38px; /* Increased internal padding rhythm for more breathing room */
+  padding: 32px 48px 40px; /* Increased internal padding rhythm for more breathing room */
   font-size: 1.1rem; /* Large scanable body font */
   line-height: 2.0; /* Generous spacing between lines */
   color: hsl(215, 20%, 82%);
   display: flex;
   flex-direction: column;
-  gap: 24px; /* More space between paragraphs and sections */
+  gap: 28px; /* More space between paragraphs and sections */
 }
 .section-body p, .section-body li, .section-body .answer-bullet-text {
   color: hsl(215, 20%, 82%);
@@ -642,9 +642,13 @@ button, input, textarea, select {
 
 .answer-bullet {
   display: flex;
-  gap: 16px; /* More spacing between dot and bullet text */
+  gap: 18px; /* More spacing between dot and bullet text */
   align-items: flex-start;
-  padding: 10px 0; /* Extra vertical space around bullets */
+  padding: 0;
+  margin-bottom: 20px; /* Spacing between consecutive bullets */
+}
+.answer-bullet:last-child {
+  margin-bottom: 0;
 }
 .answer-bullet-dot {
   width: 5px;
@@ -660,9 +664,40 @@ button, input, textarea, select {
 }
 
 .answer-paragraph {
-  margin: 0;
+  margin: 0 0 24px 0; /* Space between paragraphs */
   line-height: 2.0; /* Enlarge line-height for reading comfort */
   color: hsl(215, 20%, 82%);
+}
+.answer-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* Citation Badge Style (Inline Superscript Marker) */
+.citation-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-glow);
+  color: var(--primary-light);
+  border: 1px solid hsla(250, 89%, 65%, 0.3);
+  border-radius: 50%;
+  width: 17px;
+  height: 17px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  margin: 0 3px;
+  vertical-align: super;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+  line-height: 1;
+}
+.citation-badge:hover {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary-light);
+  box-shadow: 0 0 8px hsla(250, 89%, 65%, 0.5);
+  transform: translateY(-1px) scale(1.08);
 }
 
 .answer-generating {

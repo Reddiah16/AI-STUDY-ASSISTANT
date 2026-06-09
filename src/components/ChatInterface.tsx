@@ -317,18 +317,39 @@ function getSectionMeta(heading: string): { icon: string; accent: string } {
 }
 
 /**
- * Inline text renderer — handles **bold**, *italic*, `code`, and plain text.
+ * Inline text renderer — handles **bold**, *italic*, `code`, citation tags, and plain text.
  */
-function renderInline(text: string): React.ReactNode {
+function renderInline(text: string, onOpenSource?: (idx: number) => void): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[Source (\d+(?:,\s*\d+)*)\])/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = regex.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[2]) parts.push(<strong key={m.index} style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{m[2]}</strong>);
-    else if (m[3]) parts.push(<em key={m.index} style={{ color: 'var(--text-secondary)' }}>{m[3]}</em>);
-    else if (m[4]) parts.push(<code key={m.index} style={{ background: 'var(--bg-surface-elevated)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.83em', color: 'var(--primary-light)' }}>{m[4]}</code>);
+    if (m[2]) {
+      parts.push(<strong key={m.index} style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{m[2]}</strong>);
+    } else if (m[3]) {
+      parts.push(<em key={m.index} style={{ color: 'var(--text-secondary)' }}>{m[3]}</em>);
+    } else if (m[4]) {
+      parts.push(<code key={m.index} style={{ background: 'var(--bg-surface-elevated)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.83em', color: 'var(--primary-light)' }}>{m[4]}</code>);
+    } else if (m[5]) {
+      const indices = m[5].split(',').map(s => parseInt(s.trim()));
+      indices.forEach((idx, i) => {
+        parts.push(
+          <button
+            key={`${m!.index}-${i}`}
+            className="citation-badge"
+            type="button"
+            onClick={() => {
+              if (onOpenSource) onOpenSource(idx - 1);
+            }}
+            title={`Click to view Source ${idx}`}
+          >
+            {idx}
+          </button>
+        );
+      });
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
@@ -338,7 +359,7 @@ function renderInline(text: string): React.ReactNode {
 /**
  * Parses an array of content lines into bullet items or paragraphs.
  */
-function renderLines(lines: string[]): React.ReactNode {
+function renderLines(lines: string[], onOpenSource?: (idx: number) => void): React.ReactNode {
   return lines.map((line, i) => {
     const trimmedLine = line.trim();
     const isBullet = /^[-•●▪◦■☑✓]/.test(trimmedLine);
@@ -348,13 +369,13 @@ function renderLines(lines: string[]): React.ReactNode {
       return (
         <div key={i} className="answer-bullet">
           <div className="answer-bullet-dot" />
-          <div className="answer-bullet-text">{renderInline(stripped)}</div>
+          <div className="answer-bullet-text">{renderInline(stripped, onOpenSource)}</div>
         </div>
       );
     }
     if (!trimmedLine) return null;
     return (
-      <p key={i} className="answer-paragraph">{renderInline(trimmedLine)}</p>
+      <p key={i} className="answer-paragraph">{renderInline(trimmedLine, onOpenSource)}</p>
     );
   });
 }
@@ -461,7 +482,7 @@ function StructuredAnswer({
             if (!sec.heading) {
               return (
                 <div key={idx} className="answer-plain">
-                  {renderLines(bodyLines)}
+                  {renderLines(bodyLines, onOpenSource)}
                 </div>
               );
             }
@@ -474,7 +495,7 @@ function StructuredAnswer({
                 </div>
                 {bodyLines.length > 0 && (
                   <div className="section-body">
-                    {renderLines(bodyLines)}
+                    {renderLines(bodyLines, onOpenSource)}
                   </div>
                 )}
               </div>
@@ -483,7 +504,7 @@ function StructuredAnswer({
         </div>
       ) : (
         <div className="answer-plain">
-          {renderLines(raw.split('\n'))}
+          {renderLines(raw.split('\n'), onOpenSource)}
         </div>
       )}
 
