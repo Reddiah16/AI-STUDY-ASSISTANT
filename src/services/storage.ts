@@ -69,15 +69,15 @@ async function extractContentText(file: File): Promise<string> {
     file.name.endsWith('.txt') ||
     file.name.endsWith('.md');
 
+  let rawText = '';
+
   if (isTextFile) {
     try {
-      return await file.text();
+      rawText = await file.text();
     } catch {
       // Fallback if browser text reader fails
     }
-  }
-
-  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+  } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
     try {
       console.info(`Starting PDF text extraction for: ${file.name}`);
       const arrayBuffer = await file.arrayBuffer();
@@ -122,7 +122,7 @@ async function extractContentText(file: File): Promise<string> {
       }
       
       console.info(`Successfully extracted ${fullText.length} characters from ${pdf.numPages} pages.`);
-      return fullText.trim();
+      rawText = fullText.trim();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Error parsing PDF (${file.name}):`, msg);
@@ -130,8 +130,12 @@ async function extractContentText(file: File): Promise<string> {
     }
   }
 
-  // Fallback placeholder content for unreadable or unsupported files
-  return generateMockContentForFile(file.name);
+  if (!rawText) {
+    rawText = generateMockContentForFile(file.name);
+  }
+
+  // Clean null bytes (\u0000) to prevent PostgreSQL "unsupported Unicode escape sequence" error
+  return rawText.replaceAll('\u0000', '');
 }
 
 /**
