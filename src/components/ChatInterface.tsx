@@ -394,14 +394,16 @@ function GroundingBadge({ sources }: { sources: RagSource[] }) {
  */
 function StructuredAnswer({
   raw,
-  sources = [],
+  sources,
   onOpenSource,
   onRetry,
+  hideWarning = false,
 }: {
   raw: string;
   sources?: RagSource[];
   onOpenSource?: (idx: number) => void;
   onRetry?: () => void;
+  hideWarning?: boolean;
 }) {
   if (raw.startsWith('[ERROR]')) {
     const errorMsg = raw.replace('[ERROR]', '').trim();
@@ -444,11 +446,12 @@ function StructuredAnswer({
   }
 
   const hasHeadings = !(sections.length === 0 || (sections.length === 1 && !sections[0].heading));
+  const actualSources = sources || [];
 
   return (
     <div>
       {/* Grounding badge */}
-      <GroundingBadge sources={sources} />
+      <GroundingBadge sources={actualSources} />
 
       {hasHeadings ? (
         <div className="answer-body">
@@ -485,10 +488,10 @@ function StructuredAnswer({
       )}
 
       {/* Source chips — clickable citations */}
-      {sources.length > 0 && onOpenSource && (
+      {actualSources.length > 0 && onOpenSource && (
         <div className="source-chip-row">
           <span className="source-chip-label">Cited:</span>
-          {sources.map((src, i) => (
+          {actualSources.map((src, i) => (
             <button
               key={i}
               className="source-chip"
@@ -504,7 +507,7 @@ function StructuredAnswer({
       )}
 
       {/* No-document soft warning */}
-      {sources.length === 0 && (
+      {!hideWarning && sources !== undefined && sources.length === 0 && (
         <div className="grounding-warning">
           <span>⚠️</span>
           <span>No document sources were matched. Upload and select study materials for grounded, document-sourced answers.</span>
@@ -1467,6 +1470,10 @@ export default function ChatInterface({
                           sources={(msg.sources || []) as RagSource[]}
                           onOpenSource={(idx) => openDrawer((msg.sources || []) as RagSource[], idx)}
                           onRetry={() => regenerateLastAnswer(activeMode)}
+                          hideWarning={
+                            selectedDocs.length === 0 ||
+                            (idx > 0 && messages[idx - 1].content.startsWith('👉'))
+                          }
                         />
                     }
                   </div>
