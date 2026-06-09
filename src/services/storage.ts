@@ -123,8 +123,9 @@ async function extractContentText(file: File): Promise<string> {
       
       console.info(`Successfully extracted ${fullText.length} characters from ${pdf.numPages} pages.`);
       return fullText.trim();
-    } catch (err: any) {
-      console.error(`Error parsing PDF (${file.name}):`, err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error parsing PDF (${file.name}):`, msg);
       // Fall back to mock content below if it fails completely
     }
   }

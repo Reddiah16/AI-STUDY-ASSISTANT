@@ -16,9 +16,9 @@ type ActionType = 'summarize' | 'explain' | 'bullets' | 'quiz' | 'flashcards';
 
 export type StudyMode = 'normal' | 'simple' | 'exam' | 'twoMark' | 'fiveMark' | 'revision' | 'flashcard' | 'quiz';
 
-export const STUDY_TAGS = ['Important', 'Definitions', 'Examples', 'Needs Revision'];
+const STUDY_TAGS = ['Important', 'Definitions', 'Examples', 'Needs Revision'];
 
-export const STUDY_MODE_PROMPTS: Record<StudyMode, string> = {
+const STUDY_MODE_PROMPTS: Record<StudyMode, string> = {
   normal: '',
   simple: '\n[STUDY MODE: Simple Explanation] Format the output as a simple explanation using everyday language and an intuitive analogy or a metaphor that a child could understand. Avoid technical jargon or explain it immediately in plain words.',
   exam: '\n[STUDY MODE: Exam Prep] Format the output as a structured, formal academic answer. Highlight clear definitions, key bulleted points, and any critical terms. Conclude with 2 potential review questions.',
@@ -29,7 +29,7 @@ export const STUDY_MODE_PROMPTS: Record<StudyMode, string> = {
   quiz: '\n[STUDY MODE: Quiz] Format the output strictly as a study quiz. Generate 3-5 multiple-choice or short-answer questions with correct answers listed at the very bottom.'
 };
 
-export const STUDY_MODES = [
+const STUDY_MODES = [
   { id: 'normal', label: '📖 Normal', desc: 'Standard grounded study answers' },
   { id: 'simple', label: '👶 Simple', desc: 'Explanation using simple analogies' },
   { id: 'exam', label: '🎓 Exam Prep', desc: 'Academic styling and sample questions' },
@@ -41,7 +41,7 @@ export const STUDY_MODES = [
 ];
 
 interface ChatInterfaceProps {
-  user: any;
+  user: { id: string; user_metadata?: { full_name?: string }; email?: string };
   allDocuments: Document[];
   initialSelectedDocs: Document[];
   /** If provided, open this session immediately instead of the latest one */
@@ -69,6 +69,7 @@ function NotebookDrawer({
   // If items shrink or delete occurred
   useEffect(() => {
     if (selectedIdx >= items.length && items.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIdx(items.length - 1);
     }
   }, [items.length, selectedIdx]);
@@ -308,7 +309,7 @@ const SECTION_META: Record<string, { icon: string; accent: string }> = {
 };
 
 function getSectionMeta(heading: string): { icon: string; accent: string } {
-  const lower = heading.toLowerCase().replace(/[📘📝💡✏️🔑📋🛠️⚡📚📄🔬📊✅🗺️📌:]/g, '').trim();
+  const lower = heading.toLowerCase().replace(/\u{270F}\u{FE0F}?|[\u{1F4D8}\u{1F4DD}\u{1F4A1}\u{1F511}\u{1F4CB}\u{1F6E0}\u{26A1}\u{1F4DA}\u{1F4C4}\u{1F52C}\u{1F4CA}\u{2705}\u{1F5FA}\u{1F4CC}:]/gu, '').trim();
   for (const key of Object.keys(SECTION_META)) {
     if (lower.includes(key)) return SECTION_META[key];
   }
@@ -552,7 +553,7 @@ export default function ChatInterface({
   // Study Mode, Notebook, and collapsible states
   const [activeMode, setActiveMode] = useState<StudyMode>('normal');
   const [notebookOpen, setNotebookOpen] = useState(false);
-  const [savedAnswers, setSavedAnswers] = useState<Record<string, any>>({});
+  const [savedAnswers, setSavedAnswers] = useState<Record<string, string>>({});
   const [messageTags, setMessageTags] = useState<Record<string, string[]>>({});
   const [sidebarNotebookExpanded, setSidebarNotebookExpanded] = useState(false);
   const [sidebarDoubtsExpanded, setSidebarDoubtsExpanded] = useState(false);
@@ -617,6 +618,7 @@ export default function ChatInterface({
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSavedAnswers();
     loadMessageTags();
   }, [loadSavedAnswers, loadMessageTags]);
@@ -626,14 +628,6 @@ export default function ChatInterface({
     setDrawerIndex(idx);
   };
   const closeDrawer = () => setDrawerSources([]);
-
-  // ── Load sessions on mount ─────────────────────────────────────────────────
-
-  useEffect(() => { loadSessions(); }, [user.id]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamText]);
 
   const loadSessions = async () => {
     try {
@@ -661,9 +655,22 @@ export default function ChatInterface({
     }
   };
 
+  // ── Load sessions on mount ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, streamText]);
+
   // ── Load messages when session changes ─────────────────────────────────────
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!currentSession) { setMessages([]); return; }
     (async () => {
       try {
@@ -675,6 +682,7 @@ export default function ChatInterface({
         setLoadingMessages(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSession?.id]);
 
   // ── Session management ─────────────────────────────────────────────────────
@@ -776,9 +784,10 @@ export default function ChatInterface({
           onError: (err) => handleGenerationError(err, 'Failed to generate answer. Please try again.'),
         }
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err.message || 'Something went wrong.', 'error');
+      const msg = err instanceof Error ? err.message : 'Something went wrong.';
+      showToast(msg, 'error');
       setGenerating(false);
     }
   };
@@ -788,7 +797,7 @@ export default function ChatInterface({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend(e as any);
+      void handleSend(e as unknown as React.FormEvent);
     }
   };
 
@@ -859,8 +868,9 @@ export default function ChatInterface({
           setActionLoadingKey(null);
         },
       );
-    } catch (err: any) {
-      showToast(err.message || 'Action failed.', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Action failed.';
+      showToast(msg, 'error');
       setGenerating(false);
       setActionLoadingKey(null);
     }
@@ -909,8 +919,9 @@ export default function ChatInterface({
         },
         (err) => handleGenerationError(err, 'Failed to generate answer. Please try again.'),
       );
-    } catch (err: any) {
-      showToast(err.message || 'Follow-up failed.', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Follow-up failed.';
+      showToast(msg, 'error');
       setGenerating(false);
     }
   };
@@ -925,7 +936,11 @@ export default function ChatInterface({
   const handleToggleSources = (msgId: string) => {
     setVisibleSourceIds(prev => {
       const next = new Set(prev);
-      next.has(msgId) ? next.delete(msgId) : next.add(msgId);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+      } else {
+        next.add(msgId);
+      }
       return next;
     });
   };
@@ -988,7 +1003,7 @@ export default function ChatInterface({
     } else {
       const MOCK_MESSAGES = 'study_assistant_messages';
       const msgs = JSON.parse(localStorage.getItem(MOCK_MESSAGES) || '[]');
-      const filtered = msgs.filter((m: any) => m.id !== msgId);
+      const filtered = msgs.filter((m: { id: string }) => m.id !== msgId);
       localStorage.setItem(MOCK_MESSAGES, JSON.stringify(filtered));
     }
   };
@@ -1132,9 +1147,10 @@ export default function ChatInterface({
           onError: (err) => handleGenerationError(err, 'Failed to regenerate answer. Please try again.'),
         }
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err.message || 'Something went wrong.', 'error');
+      const msg = err instanceof Error ? err.message : 'Something went wrong.';
+      showToast(msg, 'error');
       setGenerating(false);
     }
   };

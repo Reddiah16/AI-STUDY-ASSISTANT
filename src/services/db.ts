@@ -28,12 +28,22 @@ export interface ChatSession {
   created_at: string;
 }
 
+// Minimal shape of a persisted RAG source citation
+export interface RagSourceRecord {
+  id: string;
+  documentId: string;
+  fileName: string;
+  contentSnippet: string;
+  content: string;
+  similarity: number;
+}
+
 export interface ChatMessage {
   id: string;
   session_id: string;
   sender_role: 'user' | 'assistant';
   content: string;
-  sources: any[];
+  sources: RagSourceRecord[];
   created_at: string;
 }
 
@@ -367,7 +377,7 @@ export async function saveChatMessage(
   sessionId: string,
   senderRole: 'user' | 'assistant',
   content: string,
-  sources: any[] = []
+  sources: RagSourceRecord[] = []
 ): Promise<ChatMessage> {
   if (isSupabaseConfigured) {
     const { data, error } = await supabase

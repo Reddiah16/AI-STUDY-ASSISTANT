@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Lock, Mail, User, ArrowRight } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
+import { Lock, Mail, User as UserIcon, ArrowRight } from 'lucide-react';
 
 interface AuthFormProps {
-  onAuthSuccess: (user: any) => void;
+  onAuthSuccess: (user: User) => void;
   showToast: (message: string, type: 'success' | 'error' | 'warning') => void;
   onBackToLanding: () => void;
 }
@@ -76,9 +77,10 @@ export default function AuthForm({ onAuthSuccess, showToast, onBackToLanding }: 
         );
         onAuthSuccess(mockUser);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err.message || 'Authentication failed. Please try again.', 'error');
+      const msg = err instanceof Error ? err.message : 'Authentication failed. Please try again.';
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -100,7 +102,7 @@ export default function AuthForm({ onAuthSuccess, showToast, onBackToLanding }: 
           <div className="form-group">
             <label className="form-label">Full Name</label>
             <div style={{ position: 'relative' }}>
-              <User 
+              <UserIcon 
                 size={18} 
                 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} 
               />

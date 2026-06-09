@@ -91,10 +91,11 @@ async function retrieveRelevantChunks(
         const resultsCount = data?.length ?? 0;
         if (resultsCount > 0) {
           console.info(`[RAG Retrieval] Successfully retrieved ${resultsCount} chunk(s) from Supabase.`);
-          data.forEach((item: any, index: number) => {
+          interface RpcChunk { id: string; document_id: string; content: string; similarity: number; }
+          data.forEach((item: RpcChunk, index: number) => {
             console.info(`  - Chunk #${index + 1}: ID=${item.id}, DocumentID=${item.document_id}, Similarity=${(item.similarity * 100).toFixed(1)}%, Snippet="${item.content.substring(0, 80).replace(/\n/g, ' ')}..."`);
           });
-          return data.map((item: any) => ({
+          return data.map((item: RpcChunk) => ({
             id: item.id,
             documentId: item.document_id,
             content: item.content,
@@ -104,7 +105,7 @@ async function retrieveRelevantChunks(
           console.warn(`[RAG Retrieval] Failed retrieval: Supabase search returned 0 matching chunks for query "${query}".`);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[RAG Retrieval] Vector search exception occurred:', err, 'Falling back to client-side search.');
     }
   }
@@ -126,7 +127,7 @@ async function retrieveRelevantChunks(
       console.warn(`[RAG Retrieval] Failed retrieval: Fallback search returned 0 matching chunks for query "${query}".`);
     }
     return matched;
-  } catch (fallbackErr: any) {
+  } catch (fallbackErr: unknown) {
     console.error('[RAG Retrieval] Fallback search failed entirely:', fallbackErr);
     return [];
   }

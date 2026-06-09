@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
+import type { User } from '@supabase/supabase-js';
 import LandingPage from './components/LandingPage';
 import AuthForm from './components/AuthForm';
 import Dashboard from './components/Dashboard';
@@ -15,7 +16,7 @@ interface ToastState {
 
 export default function App() {
   const [view, setView] = useState<ViewState>('landing');
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [allDocs, setAllDocs] = useState<Document[]>([]);
   const [activeChatDocs, setActiveChatDocs] = useState<Document[]>([]);
@@ -23,7 +24,7 @@ export default function App() {
 
   // Custom Toast State
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [toastTimeout, setToastTimeout] = useState<any>(null);
+  const [toastTimeout, setToastTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   // Show message banner helper
   const showToast = (message: string, type: 'success' | 'error' | 'warning') => {
@@ -79,7 +80,7 @@ export default function App() {
         subscription.unsubscribe();
       };
     } else {
-      // Mock mode default loading state resolution
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
     }
   }, []);
@@ -98,13 +99,13 @@ export default function App() {
       setAllDocs([]);
       setActiveChatDocs([]);
       showToast('Logged out successfully.', 'success');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       showToast('Logout failed.', 'error');
     }
   };
 
-  const handleAuthSuccess = async (authenticatedUser: any) => {
+  const handleAuthSuccess = async (authenticatedUser: User) => {
     setUser(authenticatedUser);
     setView('dashboard');
     try {

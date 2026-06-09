@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 interface DashboardProps {
-  user: any;
+  user: { id: string; user_metadata?: { full_name?: string }; email?: string };
   onStartChat: (selectedDocs: Document[], sessionId?: string) => void;
   showToast: (message: string, type: 'success' | 'error' | 'warning') => void;
   onLogout: () => void;
@@ -73,15 +73,7 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
 
   // ── Data Loading ──────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    loadAll();
-  }, [user.id]);
-
-  async function loadAll() {
-    await Promise.all([loadDocuments(), loadSessions(), loadProfile()]);
-  }
-
-  async function loadDocuments() {
+  const loadDocuments = React.useCallback(async () => {
     try {
       setLoadingDocs(true);
       setDocuments(await fetchDocuments(user.id));
@@ -91,9 +83,9 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
     } finally {
       setLoadingDocs(false);
     }
-  }
+  }, [user.id, showToast]);
 
-  async function loadSessions() {
+  const loadSessions = React.useCallback(async () => {
     try {
       setLoadingSessions(true);
       setSessions(await fetchChatSessions(user.id));
@@ -102,16 +94,27 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
     } finally {
       setLoadingSessions(false);
     }
-  }
+  }, [user.id]);
 
-  async function loadProfile() {
+  const loadProfile = React.useCallback(async () => {
     try {
       const p = await getProfile(user.id);
       if (p) { setProfile(p); setProfileName(p.full_name); }
     } catch (err) {
       console.error(err);
     }
-  }
+  }, [user.id]);
+
+  const loadAll = React.useCallback(async () => {
+    await Promise.all([loadDocuments(), loadSessions(), loadProfile()]);
+  }, [loadDocuments, loadSessions, loadProfile]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadAll();
+  }, [loadAll]);
+
+
 
   // ── Profile ───────────────────────────────────────────────────────────────
 
@@ -124,8 +127,9 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
       setProfile(updated);
       showToast('Profile updated.', 'success');
       setShowProfileModal(false);
-    } catch (err: any) {
-      showToast(err.message || 'Failed to update profile.', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update profile.';
+      showToast(msg, 'error');
     } finally {
       setSavingProfile(false);
     }
@@ -149,8 +153,8 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
   };
 
   const handleUpload = async (file: File) => {
-    const err = validateFile(file);
-    if (err) { showToast(err, 'error'); return; }
+    const validationErr = validateFile(file);
+    if (validationErr) { showToast(validationErr, 'error'); return; }
 
     try {
       setUploading(true);
@@ -159,8 +163,9 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
       const newDoc = await saveDocumentMetadata(user.id, file.name, filePath, fileUrl, file.size, contentText);
       setDocuments(prev => [newDoc, ...prev]);
       showToast(`"${file.name}" uploaded and indexed!`, 'success');
-    } catch (err: any) {
-      showToast(err.message || 'Upload failed. Please try again.', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      showToast(msg, 'error');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -178,7 +183,7 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
       await deleteDocument(doc.id);
       setDocuments(prev => prev.filter(d => d.id !== doc.id));
       showToast('Document removed.', 'success');
-    } catch (err: any) {
+    } catch {
       showToast('Failed to delete document.', 'error');
     }
   };
@@ -219,8 +224,8 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
     return `${parseFloat((b / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
 
-  const timeAgo = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
+  const timeAgo = (iso: string, nowMs: number) => {
+    const diff = nowMs - new Date(iso).getTime();
     const m = Math.floor(diff / 60000);
     if (m < 1) return 'just now';
     if (m < 60) return `${m}m ago`;
@@ -228,6 +233,9 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
     if (h < 24) return `${h}h ago`;
     return `${Math.floor(h / 24)}d ago`;
   };
+
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = React.useMemo(() => Date.now(), []);
 
   const displayName = profile?.full_name || user.user_metadata?.full_name || user.email;
   const totalSize = documents.reduce((s, d) => s + Number(d.file_size), 0);
@@ -457,7 +465,7 @@ export default function Dashboard({ user, onStartChat, showToast, onLogout }: Da
                         {s.title}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                        {timeAgo(s.created_at)}
+                        {timeAgo(s.created_at, nowMs)}
                       </div>
                     </div>
                   </div>

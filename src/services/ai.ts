@@ -104,7 +104,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     }
 
     const data = await response.json();
-    return data.data.map((item: any) => item.embedding);
+    return data.data.map((item: { embedding: number[] }) => item.embedding);
   }
 }
 
@@ -156,7 +156,7 @@ export async function semanticRetrieval(
     
     // Simple TF-IDF approximation for keyword match
     queryWords.forEach(word => {
-      const regex = new RegExp(word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g');
+      const regex = new RegExp(word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g');
       const count = (contentLower.match(regex) || []).length;
       if (count > 0) {
         score += count * (1 / word.length); // Weight longer words higher
@@ -273,7 +273,7 @@ export class MockLlmProvider implements LlmProvider {
         // ── ### Key Points — bullets with explanation ─────────────────────────
         body += `### Key Points\n`;
         body += `The following key points are grounded directly in the retrieved study material:\n\n`;
-        relevant.forEach((s, idx) => {
+        relevant.forEach((s) => {
           const titleWords = s.text.split(' ').slice(0, 5).join(' ').replace(/[^a-zA-Z0-9\s]/g, '').replace(/^[a-z]/, c => c.toUpperCase());
           body += `- **${titleWords}**: ${s.text} [Source ${s.sourceIdx}]\n`;
         });
