@@ -108,13 +108,61 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
+export class GeminiEmbeddingProvider implements EmbeddingProvider {
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  async generate(text: string): Promise<number[]> {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${this.apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'models/text-embedding-004',
+        content: {
+          parts: [{ text: text }]
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Gemini API error: ${error?.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const vector = data.embedding.values as number[];
+    
+    // Pad to 1536 dimensions to match database schema expectation
+    const paddedVector = new Array(1536).fill(0);
+    for (let i = 0; i < vector.length && i < 1536; i++) {
+      paddedVector[i] = vector[i];
+    }
+    return paddedVector;
+  }
+
+  async generateBatch(texts: string[]): Promise<number[][]> {
+    // text-embedding-004 supports batchEmbedContents but for simplicity we will map over generate
+    return Promise.all(texts.map(t => this.generate(t)));
+  }
+}
+
 let activeProvider: EmbeddingProvider | null = null;
 
 export function getEmbeddingProvider(): EmbeddingProvider {
   if (activeProvider) return activeProvider;
 
+  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const openAiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (openAiKey) {
+  
+  if (geminiKey) {
+    console.info('Using GeminiEmbeddingProvider');
+    activeProvider = new GeminiEmbeddingProvider(geminiKey);
+  } else if (openAiKey) {
     console.info('Using OpenAIEmbeddingProvider');
     activeProvider = new OpenAIEmbeddingProvider(openAiKey);
   } else {
@@ -405,13 +453,97 @@ export class OpenAiLlmProvider implements LlmProvider {
   }
 }
 
+export class GeminiLlmProvider implements LlmProvider {
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  async generateStream(
+    systemPrompt: string,
+    userPrompt: string,
+    onChunk: (partialText: string) => void,
+    onComplete: (fullText: string) => void,
+    onError: (error: Error) => void
+  ): Promise<void> {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${this.apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: userPrompt }]
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error?.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
+
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const cleanedLine = line.trim();
+          if (!cleanedLine) continue;
+          
+          if (cleanedLine.startsWith('data: ')) {
+            try {
+              const jsonStr = cleanedLine.slice(6);
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              if (content) {
+                fullText += content;
+                onChunk(fullText);
+              }
+            } catch {
+              // Ignore parsing errors for partial/incomplete SSE lines
+            }
+          }
+        }
+      }
+      onComplete(fullText);
+    } catch (err) {
+      onError(err instanceof Error ? err : new Error(String(err)));
+    }
+  }
+}
+
 let activeLlmProvider: LlmProvider | null = null;
 
 export function getLlmProvider(): LlmProvider {
   if (activeLlmProvider) return activeLlmProvider;
 
+  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const openAiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (openAiKey) {
+  
+  if (geminiKey) {
+    console.info('Using GeminiLlmProvider');
+    activeLlmProvider = new GeminiLlmProvider(geminiKey);
+  } else if (openAiKey) {
     console.info('Using OpenAiLlmProvider');
     activeLlmProvider = new OpenAiLlmProvider(openAiKey);
   } else {

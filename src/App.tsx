@@ -118,6 +118,7 @@ export default function App() {
 
   // Navigates from dashboard to chat workspace
   const handleStartChat = async (selectedDocs: Document[], sessionId?: string) => {
+    if (!user) return;
     try {
       const docs = await fetchDocuments(user.id);
       setAllDocs(docs);

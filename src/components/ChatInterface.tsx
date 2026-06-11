@@ -577,7 +577,7 @@ export default function ChatInterface({
   // Study Mode, Notebook, and collapsible states
   const [activeMode, setActiveMode] = useState<StudyMode>('normal');
   const [notebookOpen, setNotebookOpen] = useState(false);
-  const [savedAnswers, setSavedAnswers] = useState<Record<string, string>>({});
+  const [savedAnswers, setSavedAnswers] = useState<Record<string, { content: string; savedAt: string; query: string; tags?: string[] }>>({});
   const [messageTags, setMessageTags] = useState<Record<string, string[]>>({});
   const [sidebarNotebookExpanded, setSidebarNotebookExpanded] = useState(false);
   const [sidebarDoubtsExpanded, setSidebarDoubtsExpanded] = useState(false);

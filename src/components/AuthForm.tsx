@@ -51,7 +51,7 @@ export default function AuthForm({ onAuthSuccess, showToast, onBackToLanding }: 
           });
           if (error) throw error;
           
-          if (data.session) {
+          if (data.session && data.user) {
             showToast('Registration successful! Welcome.', 'success');
             onAuthSuccess(data.user);
           } else {
@@ -75,7 +75,7 @@ export default function AuthForm({ onAuthSuccess, showToast, onBackToLanding }: 
             : 'Account registered successfully (Demo mode).', 
           'success'
         );
-        onAuthSuccess(mockUser);
+        onAuthSuccess(mockUser as unknown as User);
       }
     } catch (err: unknown) {
       console.error(err);
