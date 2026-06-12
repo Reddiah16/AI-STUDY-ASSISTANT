@@ -84,7 +84,7 @@ async function retrieveRelevantChunks(
       console.info(`[RAG Retrieval] Querying Supabase match_document_chunks RPC with threshold 0.35, topK=${topK}...`);
       const { data, error } = await supabase.rpc('match_document_chunks', {
         query_embedding: queryEmbedding,
-        match_threshold: 0.35, // Stricter threshold for highly relevant context
+        match_threshold: 0.25, // Loosened threshold for broader context, LLM will filter
         match_count: topK,
         filter_document_ids: documentIds,
       });
@@ -161,9 +161,11 @@ export async function ragAnswer(
   console.info(`[RAG Pipeline] Processing prompt. SessionId=${request.sessionId}`);
   try {
     // ── Step 1: Retrieve ───────────────────────────────────────────────────
-    const matchedChunks = await retrieveRelevantChunks(query, documentIds, 6);
+    // Fetch top 10 chunks to ensure a broad context window
+    const matchedChunks = await retrieveRelevantChunks(query, documentIds, 10);
 
     // ── Step 2: Build citations ────────────────────────────────────────────
+    // Map the chunks to sources that the UI can use to render [Source X] references
     const sources: RagSource[] = matchedChunks.map((chunk) => ({
       id: chunk.id,
       documentId: chunk.documentId,

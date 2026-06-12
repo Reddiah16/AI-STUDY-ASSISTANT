@@ -18,31 +18,75 @@ export interface DocumentChunk {
  * 1. Document Chunking
  * Splits text into overlapping chunks of a target character length.
  */
-export function chunkDocument(text: string, chunkSize = 600, overlap = 120): string[] {
+export function chunkDocument(text: string, chunkSize = 800, overlap = 150): string[] {
   if (!text || text.trim() === '') {
     console.info('chunkDocument: Empty text provided, returning 0 chunks.');
     return [];
   }
   
-  if (text.length <= chunkSize) {
+  const cleanText = text.replace(/\r\n/g, '\n').trim();
+  if (cleanText.length <= chunkSize) {
     console.info('chunkDocument: Text is smaller than chunk size, returning 1 chunk.');
-    return [text.trim()];
+    return [cleanText];
   }
 
-  const chunks: string[] = [];
-  let index = 0;
-
-  while (index < text.length) {
-    const chunk = text.substring(index, index + chunkSize);
-    const trimmedChunk = chunk.trim();
-    if (trimmedChunk) {
-      chunks.push(trimmedChunk);
+  const separators = ['\n\n', '\n', '. ', ' '];
+  
+  function splitText(textToSplit: string, depth: number): string[] {
+    if (textToSplit.length <= chunkSize) return [textToSplit];
+    
+    const separator = depth < separators.length ? separators[depth] : '';
+    let splits: string[];
+    
+    if (separator) {
+      splits = textToSplit.split(separator);
+    } else {
+      // Fallback: forced cut
+      splits = [];
+      for (let i = 0; i < textToSplit.length; i += chunkSize) {
+        splits.push(textToSplit.substring(i, i + chunkSize));
+      }
     }
-    index += chunkSize - overlap;
+    
+    const goodChunks: string[] = [];
+    let currentChunk = '';
+    
+    for (const split of splits) {
+      if (currentChunk === '') {
+        if (split.length > chunkSize && separator) {
+          goodChunks.push(...splitText(split, depth + 1));
+        } else {
+          currentChunk = split;
+        }
+      } else {
+        const potentialChunk = currentChunk + separator + split;
+        if (potentialChunk.length <= chunkSize) {
+          currentChunk = potentialChunk;
+        } else {
+          goodChunks.push(currentChunk);
+          if (split.length > chunkSize && separator) {
+            goodChunks.push(...splitText(split, depth + 1));
+            currentChunk = '';
+          } else {
+            // Apply overlap if requested and possible
+            let overlapText = '';
+            if (overlap > 0 && currentChunk.length > overlap) {
+               overlapText = currentChunk.slice(-overlap);
+               const spaceIdx = overlapText.indexOf(' ');
+               if (spaceIdx !== -1) overlapText = overlapText.slice(spaceIdx);
+            }
+            currentChunk = overlapText + (overlapText ? ' ' : '') + split;
+          }
+        }
+      }
+    }
+    if (currentChunk) goodChunks.push(currentChunk);
+    return goodChunks;
   }
-
-  console.info(`chunkDocument: Split text into ${chunks.length} chunks (size=${chunkSize}, overlap=${overlap}).`);
-  return chunks;
+  
+  const finalChunks = splitText(cleanText, 0).map(c => c.trim()).filter(c => c.length > 0);
+  console.info(`chunkDocument: Recursively split text into ${finalChunks.length} chunks (size=${chunkSize}, overlap=${overlap}).`);
+  return finalChunks;
 }
 
 /**
@@ -196,7 +240,12 @@ export async function semanticRetrieval(
   chunks: DocumentChunk[],
   limit = 3
 ): Promise<DocumentChunk[]> {
-  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  let queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  
+  // Fallback for short queries
+  if (queryWords.length === 0 && query.trim().length > 0) {
+    queryWords = [query.toLowerCase().trim()];
+  }
   
   const chunksWithScores = chunks.map(chunk => {
     let score = 0;
@@ -225,10 +274,17 @@ export async function semanticRetrieval(
   });
 
   // Sort descending by similarity score and filter out zero-similarity chunks
-  return chunksWithScores
+  let results = chunksWithScores
     .filter(c => (c.similarity ?? 0) > 0)
     .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
     .slice(0, limit);
+    
+  // Fallback: If no keywords matched, just return the first few chunks so the LLM gets some context
+  if (results.length === 0 && chunks.length > 0) {
+    results = chunks.slice(0, limit).map(c => ({ ...c, similarity: 0.1 }));
+  }
+  
+  return results;
 }
 
 // Compatibility alias for queryMockVectorStore
@@ -568,32 +624,30 @@ export function buildGroundedPrompt(
   contextChunks: DocumentChunk[],
   documentNames: string[]
 ): GroundedPromptPayload {
-  const systemPrompt = `You are a strict and highly accurate AI Study Assistant.
+  const systemPrompt = `You are a strict, highly accurate, and analytical AI Study Assistant.
 Your primary directive is to treat the provided study materials as the ONLY trusted source of truth.
 
 Follow these strict rules:
-1. GROUNDEDNESS: Generate your answer ONLY and EXCLUSIVELY from the provided retrieved context chunks. Do not assume, extrapolate, speculate, or bring in any outside knowledge or general facts not explicitly stated in the sources.
-2. FACTUAL MATCH: Every claim you make must be a direct factual match to the provided text. Remove any unsupported claims.
-3. CONCISE ACCURACY: Write concisely, directly, and factually. Do not use filler words, speculative analysis, or general explanations.
-4. SOURCE CITATION: Cite sources (e.g. [Source 1], [Source 2]) for every key fact, definition, or claim.
-5. DISCLAIMER ON WEAK OR MISSING SOURCE: If the provided chunks do not contain enough information to fully answer the question, or if no chunks match the question, you MUST explicitly state: "I cannot find a full answer in the selected study documents because the sources are missing or weak." and only provide what partial context is directly supported. Do not make up any answers.
-6. EXTRA EXPLANATION: Add extra explanation or worked examples ONLY when the retrieved source material explicitly contains them. Do not generate hypothetical code blocks, scenarios, or explanations out of general knowledge.
+1. GROUNDEDNESS & HALLUCINATION PREVENTION: Generate your answer ONLY and EXCLUSIVELY from the provided retrieved context chunks. Do not assume, extrapolate, speculate, or bring in any outside knowledge or general facts not explicitly stated in the sources.
+2. ZERO HALLUCINATION CONSTRAINT: If the answer cannot be determined from the context, or if the question is unrelated to the study materials, you MUST state exactly: "The provided documents do not contain the answer." Do not attempt to guess or synthesize an answer from outside knowledge.
+3. FACTUAL MATCH: Every claim you make must be a direct factual match to the provided text.
+4. SOURCE CITATION: You MUST cite the source exactly using the provided source tags (e.g., [Source 1], [Source 2]) at the end of every sentence or key fact you extract. This is absolutely critical.
+5. CONCISE ACCURACY: Write concisely, directly, and factually. Do not use filler words.
 
 Formatting structure (card-based rendering):
 Use the following headers, but only include a section if there is direct, factual material in the sources to support it. If a section has no source support, omit it entirely.
-- ### Summary (A single-sentence direct answer, followed by concise, strictly grounded paragraph(s))
+- ### Summary (A concise, strictly grounded direct answer)
 - ### Key Points (Fact-based key points with brief definitions, cited from sources)
-- ### Explanation (Explanations or examples ONLY if explicitly present in the sources)
 - ### Conclusion (A final consolidating factual sentence)`;
 
   const userPrompt = contextChunks.length === 0
     ? `No study materials were selected for this query. Provide a clear message to the user: "No active study documents are selected. Please select one or more documents from the context panel above so I can answer your question."`
-    : `Study Materials (from documents: ${documentNames.join(', ')}):
-${contextChunks.map((c, i) => `[Source ${i + 1}]: ${c.content}`).join('\n\n')}
+    : `Study Materials:
+${contextChunks.map((c, i) => `--- START [Source ${i + 1}] (from document: ${documentNames[i] || 'Unknown'}) ---\n${c.content}\n--- END [Source ${i + 1}] ---`).join('\n\n')}
 
 User Question: "${query}"
 
-Answer the question strictly using the provided Study Materials. Prioritize groundedness, factual match, concise accuracy, and active citations. If the sources are weak or missing details to fully answer, state so explicitly.`;
+Answer the question strictly using ONLY the provided Study Materials. Remember the ZERO HALLUCINATION CONSTRAINT. Provide active [Source X] citations for every sentence.`;
 
   return { systemPrompt, userPrompt };
 }
